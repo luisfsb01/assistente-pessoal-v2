@@ -1,3 +1,6 @@
+// Deve ser o PRIMEIRO import: semeia env vars fake antes que a cadeia de imports
+// de './models.js' avalie db/client.ts (que chama getConfig() no top-level).
+import '../test-setup.js';
 import { describe, expect, it } from 'vitest';
 import { MockLanguageModelV2 } from 'ai/test';
 import { loadConfig } from '../lib/config.js';
