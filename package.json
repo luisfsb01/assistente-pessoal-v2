@@ -11,6 +11,7 @@
     "job:reflect": "npm run job:reflect -w apps/server"
   },
   "devDependencies": {
+    "msw": "^2.7.0",
     "typescript": "^5.6.0",
     "vitest": "^3.0.0"
   }
