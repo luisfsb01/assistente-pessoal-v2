@@ -1,0 +1,23 @@
+{
+  "name": "@assistente/server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "job:reflect": "tsx src/scripts/run-reflection.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "^2.0.0",
+    "@supabase/supabase-js": "^2.45.0",
+    "ai": "^5.0.0",
+    "grammy": "^1.30.0",
+    "node-cron": "^3.0.3",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0"
+  }
+}
