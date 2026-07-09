@@ -43,7 +43,13 @@ async function prepare(opts: CommonOpts, deps: LlmDeps) {
   const cfg = getConfig();
   const monthCost = await deps.monthCost();
   const status = budgetStatus(monthCost, cfg.LLM_BUDGET_BRL);
-  if (status !== 'ok' && opts.onBudgetAlert) await opts.onBudgetAlert(status, monthCost);
+  if (status !== 'ok' && opts.onBudgetAlert) {
+    try {
+      await opts.onBudgetAlert(status, monthCost);
+    } catch (err) {
+      console.error('[models] onBudgetAlert falhou', err);
+    }
+  }
   return { cfg, modelId: pickModelId(opts.purpose, status, cfg) };
 }
 
@@ -77,7 +83,7 @@ export async function generateAgentText(
     tools: opts.tools,
     stopWhen: stepCountIs(8),
   });
-  await record(deps, cfg, modelId, opts.purpose, result.usage);
+  await record(deps, cfg, modelId, opts.purpose, result.totalUsage);
   return result.text;
 }
 

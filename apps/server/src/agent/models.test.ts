@@ -3,6 +3,8 @@
 import '../test-setup.js';
 import { describe, expect, it } from 'vitest';
 import { MockLanguageModelV2 } from 'ai/test';
+import { tool, type ToolSet } from 'ai';
+import { z } from 'zod';
 import { loadConfig } from '../lib/config.js';
 import type { UsageRow } from '../db/usage.js';
 import { generateAgentText, pickModelId, type LlmDeps } from './models.js';
@@ -76,5 +78,54 @@ describe('generateAgentText', () => {
       makeDeps([], 45), // 45 >= 80% de 50
     );
     expect(alerts).toEqual(['warn']);
+  });
+
+  it('registra a soma do uso de TODOS os passos (totalUsage), não só do último', async () => {
+    const recorded: UsageRow[] = [];
+    let call = 0;
+    const twoStepModel = new MockLanguageModelV2({
+      doGenerate: async () => {
+        call++;
+        if (call === 1) {
+          return {
+            finishReason: 'tool-calls',
+            usage: { inputTokens: 50, outputTokens: 10, totalTokens: 60 },
+            content: [{ type: 'tool-call', toolCallId: 'call1', toolName: 'ping', input: '{}' }],
+            warnings: [],
+          };
+        }
+        return {
+          finishReason: 'stop',
+          usage: { inputTokens: 80, outputTokens: 15, totalTokens: 95 },
+          content: [{ type: 'text', text: 'pronto' }],
+          warnings: [],
+        };
+      },
+    });
+    const tools: ToolSet = {
+      ping: tool({
+        description: 'ping de teste',
+        inputSchema: z.object({}),
+        execute: async () => 'pong',
+      }),
+    };
+    const deps: LlmDeps = {
+      createModel: () => twoStepModel,
+      record: async (u) => {
+        recorded.push(u);
+      },
+      monthCost: async () => 0,
+    };
+
+    const text = await generateAgentText(
+      { purpose: 'chat', system: 'sys', messages: [{ role: 'user', content: 'olá' }], tools },
+      deps,
+    );
+
+    expect(text).toBe('pronto');
+    expect(recorded).toHaveLength(1);
+    // soma dos dois passos: input 50+80=130, output 10+15=25 (não apenas o último passo: 80/15)
+    expect(recorded[0].inputTokens).toBe(130);
+    expect(recorded[0].outputTokens).toBe(25);
   });
 });

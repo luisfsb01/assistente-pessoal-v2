@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { getMessagesSince } from '../db/messages.js';
+import { getChatIdentity } from '../db/chats.js';
 import {
   expireMemory,
   insertMemory,
@@ -68,11 +69,23 @@ Analise as conversas do dia e as memórias existentes e produza operações:
 Inclua também preferências sobre a conduta do assistente (ex.: "não avisar sobre X").
 Se nada durável aconteceu, retorne ops vazio.`;
 
+function chatLabel(
+  identity: { kind: 'private' | 'group'; subject: 'luis' | 'esposa' | null } | null,
+  chatId: number,
+): string {
+  if (!identity) return `[chat ${chatId}]`;
+  if (identity.kind === 'group') return '[grupo]';
+  if (identity.subject === 'luis') return '[privado do Luis]';
+  if (identity.subject === 'esposa') return '[privado da Esposa]';
+  return `[chat ${chatId}]`;
+}
+
 export async function runReflection(deps = {
   getMessagesSince,
   listActiveMemories,
   getState,
   setState,
+  getChatIdentity,
   generate: generateAgentObject,
   repo: {
     insert: async (op: Extract<ReflectionOp, { action: 'add' }>) =>
@@ -91,8 +104,8 @@ export async function runReflection(deps = {
   const since =
     (await deps.getState<string>(STATE_KEY)) ??
     new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const messages = await deps.getMessagesSince(since);
   const startedAt = new Date().toISOString();
+  const messages = await deps.getMessagesSince(since);
 
   if (messages.length === 0) {
     await deps.setState(STATE_KEY, startedAt);
@@ -100,10 +113,17 @@ export async function runReflection(deps = {
   }
 
   const existing = await deps.listActiveMemories(200);
+
+  const distinctChatIds = [...new Set(messages.map((m) => m.chatId))];
+  const identities = await Promise.all(distinctChatIds.map((id) => deps.getChatIdentity(id)));
+  const labelByChatId = new Map<number, string>(
+    distinctChatIds.map((id, i) => [id, chatLabel(identities[i], id)]),
+  );
+
   const prompt = `MEMÓRIAS EXISTENTES:\n${existing
     .map((m) => `${m.id} [${m.subject}/${m.type}] ${m.content}`)
     .join('\n') || '(nenhuma)'}\n\nCONVERSAS DESDE ${since}:\n${messages
-    .map((m) => `[chat ${m.chatId}] ${m.role}: ${m.content}`)
+    .map((m) => `${labelByChatId.get(m.chatId) ?? `[chat ${m.chatId}]`} ${m.role}: ${m.content}`)
     .join('\n')}`;
 
   const output = await deps.generate({

@@ -67,3 +67,17 @@ language sql stable as $$
   order by m.embedding <=> query_embedding
   limit match_count;
 $$;
+
+create or replace function sum_month_cost_brl()
+returns numeric language sql stable as $$
+  select coalesce(sum(cost_brl), 0)
+  from llm_usage
+  where created_at >= date_trunc('month', now() at time zone 'America/Sao_Paulo') at time zone 'America/Sao_Paulo';
+$$;
+
+alter table users enable row level security;
+alter table chats enable row level security;
+alter table messages enable row level security;
+alter table memories enable row level security;
+alter table llm_usage enable row level security;
+alter table app_state enable row level security;

@@ -20,13 +20,7 @@ export async function recordUsage(u: UsageRow): Promise<void> {
 }
 
 export async function getMonthCostBrl(): Promise<number> {
-  const start = new Date();
-  start.setDate(1);
-  start.setHours(0, 0, 0, 0);
-  const { data, error } = await supabase
-    .from('llm_usage')
-    .select('cost_brl')
-    .gte('created_at', start.toISOString());
+  const { data, error } = await supabase.rpc('sum_month_cost_brl');
   if (error) throw error;
-  return (data ?? []).reduce((sum, r) => sum + Number(r.cost_brl), 0);
+  return Number(data ?? 0);
 }
