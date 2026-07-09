@@ -1,0 +1,5 @@
+services:
+  assistente-v2:
+    build: .
+    env_file: .env
+    restart: unless-stopped
