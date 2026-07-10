@@ -17,6 +17,7 @@ describe('loadConfig', () => {
     expect(cfg.LLM_BUDGET_BRL).toBe(50);
     expect(cfg.USD_BRL_RATE).toBe(5.5);
     expect(cfg.TIMEZONE).toBe('America/Sao_Paulo');
+    expect(cfg.PORT).toBe(8080);
   });
 
   it('converte números vindos de string', () => {

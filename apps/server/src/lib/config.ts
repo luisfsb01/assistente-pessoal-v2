@@ -11,6 +11,7 @@ const schema = z.object({
   LLM_BUDGET_BRL: z.coerce.number().positive().default(50),
   USD_BRL_RATE: z.coerce.number().positive().default(5.5),
   TIMEZONE: z.string().default('America/Sao_Paulo'),
+  PORT: z.coerce.number().default(8080),
 });
 
 export type Config = z.infer<typeof schema>;

@@ -5,6 +5,7 @@ import { getState, setState } from './db/state.js';
 import { defaultAgentDeps, handleMessage } from './agent/agent.js';
 import { createBot } from './bot/bot.js';
 import { startScheduler } from './jobs/scheduler.js';
+import { startWebServer } from './api/server.js';
 
 async function main() {
   const cfg = getConfig();
@@ -22,6 +23,7 @@ async function main() {
   const agentDeps = defaultAgentDeps(createBudgetAlert({ send: sendToLuis, getState, setState }));
 
   startScheduler();
+  startWebServer(cfg);
   console.log('[bot] iniciando long polling…');
   await bot.start();
 }
