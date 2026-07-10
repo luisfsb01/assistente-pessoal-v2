@@ -10,7 +10,9 @@
     "build": "npm run build -w apps/server",
     "typecheck": "npm run typecheck -w apps/server",
     "test": "vitest run",
-    "job:reflect": "npm run job:reflect -w apps/server"
+    "job:reflect": "npm run job:reflect -w apps/server",
+    "web:dev": "npm run dev -w apps/web",
+    "web:build": "npm run build -w apps/web"
   },
   "devDependencies": {
     "@types/node-cron": "^3.0.11",

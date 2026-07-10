@@ -1,0 +1,72 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --color-brand-50: #ecfdf5;
+  --color-brand-100: #d1fae5;
+  --color-brand-200: #a7f3d0;
+  --color-brand-400: #34d399;
+  --color-brand-500: #10b981;
+  --color-brand-600: #059669;
+  --color-brand-700: #047857;
+  --color-brand-800: #065f46;
+  --color-brand-900: #064e3b;
+  --color-canvas: #f3f4f6;
+  --color-surface: #ffffff;
+  --color-surface-2: #f9fafb;
+  --color-ink: #18181b;
+  --color-muted: #71717a;
+  --color-hairline: #ececef;
+  --color-accent-soft: #ecfdf5;
+  --color-accent-soft-ink: #047857;
+}
+
+.dark {
+  --color-canvas: #0a0a0b;
+  --color-surface: #161618;
+  --color-surface-2: #202024;
+  --color-ink: #f4f4f5;
+  --color-muted: #a1a1aa;
+  --color-hairline: #2a2a2e;
+  --color-accent-soft: color-mix(in oklab, var(--color-brand-500) 18%, transparent);
+  --color-accent-soft-ink: #34d399;
+}
+
+@layer base {
+  html {
+    font-size: 18px;
+  }
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-surface rounded-2xl border border-hairline shadow-sm p-5;
+  }
+  .card-hero {
+    @apply rounded-2xl p-5 text-white shadow-sm;
+    background-image: linear-gradient(135deg, var(--color-brand-600), var(--color-brand-800));
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl px-4 py-2 font-semibold text-sm transition-colors disabled:opacity-60;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 text-muted hover:bg-surface-2 rounded-xl px-3 py-2 font-medium text-sm transition-colors;
+  }
+  .badge-up {
+    @apply inline-flex items-center gap-0.5 bg-accent-soft text-accent-soft-ink text-xs font-semibold rounded-full px-2 py-0.5;
+  }
+  .badge-down {
+    @apply inline-flex items-center gap-0.5 bg-red-500/15 text-red-400 text-xs font-semibold rounded-full px-2 py-0.5;
+  }
+  .input {
+    @apply w-full bg-surface border border-hairline rounded-xl px-3 py-2 text-sm text-ink placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500;
+  }
+  .dot-ok { @apply inline-block w-2 h-2 rounded-full bg-brand-500; }
+  .dot-pending { @apply inline-block w-2 h-2 rounded-full bg-amber-400; }
+}
