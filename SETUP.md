@@ -16,7 +16,7 @@ Rodar **em ordem**:
 
 ## 2. Cadastrar usuários e chats (SQL Editor)
 
-Os chat_ids abaixo são os reais, resgatados da v1:
+Os chat_ids reais estão em SETUP.local.md (fora do git; já inseridos no banco em 2026-07-10 — este passo só é necessário se recriar o banco):
 
 ```sql
 insert into users (name, subject, telegram_chat_id) values
