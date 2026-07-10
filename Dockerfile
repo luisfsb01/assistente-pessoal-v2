@@ -7,6 +7,8 @@ RUN npm ci
 COPY tsconfig.base.json ./
 COPY apps/server apps/server
 COPY apps/web apps/web
+# Sem esse arquivo o Vite embute undefined nas VITE_* e o dashboard abre em branco
+RUN test -f apps/web/.env || (echo "ERRO: apps/web/.env ausente no contexto de build (ver DEPLOY.md passo 3)" && exit 1)
 RUN npm run build && npm run web:build
 
 FROM node:22-alpine
