@@ -20,7 +20,7 @@ age com critério.
 
 | Decisão | Escolha |
 |---|---|
-| Relação com a v1 | Do zero, sem migrar dados — **atualizado em 2026-07-10**: v1 desligada antes da virada; única migração de dados é o snapshot das transações de junho/2026 já categorizadas (exportado em `data/v1-export/`, importa na Fase 3). Bot do Telegram e chaves da v1 reaproveitados |
+| Relação com a v1 | **Atualizado em 2026-07-10**: v1 desligada; v2 usa o MESMO projeto Supabase (limite de licença) e o MESMO bot do Telegram. A migração `0000_v1_cleanup.sql` apaga as tabelas do bot da v1 e as transações fora de junho/2026, mas **mantém** `categories`, `transactions` (junho), `financial_commitments`, `goals`, `category_rules` e o Supabase Auth — o web app de finanças da v1 é adotado pela v2 (nova Fase 1.5) em vez de reconstruído na Fase 8. Snapshot de segurança em `data/v1-export/` |
 | Canal | **Telegram** (WhatsApp avaliado e descartado: custo baixo mas fricção de templates/número dedicado; não-oficial tem risco de ban) |
 | Usuários | Luis + esposa: chat privado de cada um + grupo do casal |
 | Fundação | **Construção própria** (OpenClaw avaliado e descartado: single-user, guloso de tokens, superfície de segurança grande; o valor único — casal, finanças estruturadas, orçamento apertado — teria que ser construído de qualquer jeito) |
@@ -245,6 +245,14 @@ Esquemas detalhados ficam para o plano de implementação, fase a fase.
 1. **Fundação + cérebro** — scaffold, Supabase+pgvector, bot com whitelist,
    agente com memória (3 camadas), roteador de modelos, `llm_usage` + guarda,
    reflexão noturna. *Critério: conversar hoje e ele lembrar amanhã.*
+   ✅ concluída em 2026-07-09.
+1.5. **Site adotado da v1** (adicionada em 2026-07-10) — portar `apps/web` da
+   v1 para o monorepo v2 (Dashboard, Transações, Categorias, Objetivos,
+   Compromissos, Configurações; remove Compras/Tarefas/Rotinas e o botão de
+   sync bancário até as fases 2-3), servidor Hono servindo o SPA. Melhorias do
+   dashboard viram backlog priorizado (agregação no banco, paginação, modais
+   em vez de alert, % de variação, mobile). *Critério: dashboard de junho
+   funcionando no VPS via v2.*
 2. **Tarefas + agenda + compras** — paridade essencial com a v1, conversa
    natural; esposa entra aqui.
 3. **Finanças** — Banco MCP, categorização com confirmação, metas,
