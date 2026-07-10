@@ -20,7 +20,7 @@ age com critério.
 
 | Decisão | Escolha |
 |---|---|
-| Relação com a v1 | Do zero, sem migrar dados; v1 roda em paralelo até a virada |
+| Relação com a v1 | Do zero, sem migrar dados — **atualizado em 2026-07-10**: v1 desligada antes da virada; única migração de dados é o snapshot das transações de junho/2026 já categorizadas (exportado em `data/v1-export/`, importa na Fase 3). Bot do Telegram e chaves da v1 reaproveitados |
 | Canal | **Telegram** (WhatsApp avaliado e descartado: custo baixo mas fricção de templates/número dedicado; não-oficial tem risco de ban) |
 | Usuários | Luis + esposa: chat privado de cada um + grupo do casal |
 | Fundação | **Construção própria** (OpenClaw avaliado e descartado: single-user, guloso de tokens, superfície de segurança grande; o valor único — casal, finanças estruturadas, orçamento apertado — teria que ser construído de qualquer jeito) |
