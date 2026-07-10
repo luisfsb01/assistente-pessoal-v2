@@ -22,6 +22,15 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
 
 let cached: Config | undefined;
 export function getConfig(): Config {
-  cached ??= loadConfig(process.env);
+  if (!cached) {
+    // Em dev/scripts (tsx) ninguém injeta o .env; no Docker o compose injeta
+    // via env_file e o arquivo não existe — variáveis já definidas têm precedência.
+    try {
+      process.loadEnvFile();
+    } catch {
+      // sem .env no cwd: segue com o ambiente atual
+    }
+    cached = loadConfig(process.env);
+  }
   return cached;
 }
