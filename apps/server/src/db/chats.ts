@@ -23,3 +23,16 @@ export async function getChatIdentity(chatId: number): Promise<ChatIdentity | nu
     subject: (user?.subject as 'luis' | 'esposa' | undefined) ?? null,
   };
 }
+
+export type UserRecord = { id: string; name: string; calendarId: string | null };
+
+export async function getUserBySubject(subject: 'luis' | 'esposa'): Promise<UserRecord | null> {
+  const { data, error } = await supabase
+    .from('users')
+    .select('id, name, calendar_id')
+    .eq('subject', subject)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return { id: data.id, name: data.name, calendarId: data.calendar_id ?? null };
+}
