@@ -3,6 +3,8 @@
 1. Pré-requisito: SETUP.md concluído (.env preenchido, migração rodada, users/chats cadastrados).
 2. `git clone <repo> assistente-pessoal-v2 && cd assistente-pessoal-v2`
 3. Copiar o `.env` (raiz) e o `apps/web/.env` para o servidor (nunca commitar).
+   - **Fase 2+**: O `.env` deve incluir as 3 variáveis Google:
+     `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`.
 4. `docker compose up -d --build`
 5. Logs: `docker compose logs -f assistente-v2`
 6. Atualizar: `git pull && docker compose up -d --build`

@@ -42,6 +42,39 @@ Supabase). Conferir apenas se `LLM_BUDGET_BRL` e os modelos estão como quer.
    memórias (`select * from memories`).
 4. `npm run job:reflect` roda a reflexão manualmente.
 
+## 5. Fase 2 (agendas e compras)
+
+A Fase 2 adiciona suporte a duas pessoas (você e a esposa), agendas do Google
+Calendar e lista de compras compartilhada. Execute **após** a Fase 1 estar
+validada no VPS.
+
+1. **Rodar migração do banco** (SQL Editor do Supabase):
+   - Executar `supabase/migrations/0002_fase2.sql`.
+
+2. **Ativar credenciais do Google** (local):
+   - No `.env` local, descomentar as 3 linhas:
+     ```
+     GOOGLE_CLIENT_ID=...
+     GOOGLE_CLIENT_SECRET=...
+     GOOGLE_REFRESH_TOKEN=...
+     ```
+     (Os valores da v1 já estão no arquivo, comentados.)
+
+3. **Mapear agendas do Google Calendar**:
+   - Rodar `npm run google:calendars` e **anotar o ID da agenda "Esposa"**.
+
+4. **Atualizar IDs das agendas no banco** (SQL Editor):
+   ```sql
+   update users set calendar_id = 'primary' where subject = 'luis';
+   update users set calendar_id = 'ID_DA_AGENDA_ESPOSA' where subject = 'esposa';
+   ```
+   (Substituir `ID_DA_AGENDA_ESPOSA` pelo ID da agenda anotado no passo 3.)
+
+5. **Deploy no VPS**:
+   - Copiar as **3 variáveis Google** (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
+     GOOGLE_REFRESH_TOKEN) para o arquivo `.env` do VPS.
+   - Rodar: `FORCE=1 bash scripts/deploy-pull.sh`.
+
 ## Notas
 
 - O web app da v1 sai do ar junto com a v1; ele volta servido pela v2
