@@ -29,4 +29,9 @@ describe('loadConfig', () => {
     const { TELEGRAM_TOKEN: _omit, ...rest } = minimal;
     expect(() => loadConfig(rest as NodeJS.ProcessEnv)).toThrow();
   });
+
+  it('credenciais Google são opcionais', () => {
+    const cfg = loadConfig(minimal as NodeJS.ProcessEnv);
+    expect(cfg.GOOGLE_CLIENT_ID).toBeUndefined();
+  });
 });

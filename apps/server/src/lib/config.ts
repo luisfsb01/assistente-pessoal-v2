@@ -12,6 +12,9 @@ const schema = z.object({
   USD_BRL_RATE: z.coerce.number().positive().default(5.5),
   TIMEZONE: z.string().default('America/Sao_Paulo'),
   PORT: z.coerce.number().default(8080),
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_REFRESH_TOKEN: z.string().optional(),
 });
 
 export type Config = z.infer<typeof schema>;
