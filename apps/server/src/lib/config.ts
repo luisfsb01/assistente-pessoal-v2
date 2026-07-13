@@ -1,3 +1,4 @@
+import { dirname, join } from 'node:path';
 import { z } from 'zod';
 
 const schema = z.object({
@@ -28,10 +29,15 @@ export function getConfig(): Config {
   if (!cached) {
     // Em dev/scripts (tsx) ninguém injeta o .env; no Docker o compose injeta
     // via env_file e o arquivo não existe — variáveis já definidas têm precedência.
-    try {
-      process.loadEnvFile();
-    } catch {
-      // sem .env no cwd: segue com o ambiente atual
+    // O cwd varia (raiz da repo, ou apps/server via npm -w): sobe até achar o .env.
+    let dir = process.cwd();
+    for (let i = 0; i < 3; i++) {
+      try {
+        process.loadEnvFile(join(dir, '.env'));
+        break;
+      } catch {
+        dir = dirname(dir); // sem .env aqui: tenta o diretório pai
+      }
     }
     cached = loadConfig(process.env);
   }
