@@ -8,6 +8,7 @@ const luis: ChatIdentity = { chatId: 1, kind: 'private', userName: 'Luis', subje
 
 function makeDeps(identity: ChatIdentity | null) {
   const saved: { chatId: number; role: ChatRole; content: string }[] = [];
+  const buildToolsCalls: ChatIdentity[] = [];
   const deps: AgentDeps = {
     getChatIdentity: async () => identity,
     saveMessage: async (m) => {
@@ -21,9 +22,12 @@ function makeDeps(identity: ChatIdentity | null) {
       expect(opts.messages.at(-1)).toEqual({ role: 'user', content: 'qual meu nome?' });
       return 'Você é o Luis!';
     },
-    tools: {},
+    buildTools: (identity) => {
+      buildToolsCalls.push(identity);
+      return {};
+    },
   };
-  return { deps, saved };
+  return { deps, saved, buildToolsCalls };
 }
 
 describe('handleMessage', () => {
@@ -40,5 +44,11 @@ describe('handleMessage', () => {
       { chatId: 1, role: 'user', content: 'qual meu nome?' },
       { chatId: 1, role: 'assistant', content: 'Você é o Luis!' },
     ]);
+  });
+
+  it('chama buildTools com a identidade resolvida do chat', async () => {
+    const { deps, buildToolsCalls } = makeDeps(luis);
+    await handleMessage({ chatId: 1, text: 'qual meu nome?' }, deps);
+    expect(buildToolsCalls).toEqual([luis]);
   });
 });

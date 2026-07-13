@@ -39,4 +39,15 @@ describe('buildSystemPrompt', () => {
     const p = buildSystemPrompt({ ...args, memories: [] });
     expect(p).not.toContain('O que você sabe');
   });
+
+  it('no privado, menciona tarefas e agenda', () => {
+    const p = buildSystemPrompt(args).toLowerCase();
+    expect(p).toContain('tarefas');
+    expect(p).toContain('agenda');
+  });
+
+  it('no grupo, menciona lista de compras', () => {
+    const p = buildSystemPrompt({ ...args, identity: grupo, memories: [] }).toLowerCase();
+    expect(p).toContain('lista de compras');
+  });
 });

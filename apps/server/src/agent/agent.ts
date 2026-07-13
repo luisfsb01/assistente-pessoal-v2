@@ -2,11 +2,15 @@ import { tool, type ToolSet } from 'ai';
 import { z } from 'zod';
 import type { BudgetStatus } from '../lib/budget.js';
 import { getConfig } from '../lib/config.js';
-import { getChatIdentity, type ChatIdentity } from '../db/chats.js';
+import { hasGoogleCreds, getCalendarClient } from '../lib/google.js';
+import { getChatIdentity, getUserBySubject, type ChatIdentity } from '../db/chats.js';
 import { getRecentMessages, saveMessage, type ChatRole } from '../db/messages.js';
 import { insertMemory, type Memory, type MemorySubject } from '../db/memories.js';
 import { embedText } from '../memory/embeddings.js';
 import { recallMemories } from '../memory/recall.js';
+import { buildTaskTools } from '../tools/tasks.js';
+import { buildShoppingTools } from '../tools/shopping.js';
+import { buildCalendarTools, calendarApiFromGoogle } from '../tools/calendar.js';
 import { generateAgentText } from './models.js';
 import { buildSystemPrompt, subjectsForChat } from './prompts.js';
 
@@ -16,11 +20,11 @@ export type AgentDeps = {
   getRecentMessages: (chatId: number, limit?: number) => Promise<{ role: ChatRole; content: string }[]>;
   recall: (text: string, subjects: MemorySubject[]) => Promise<Memory[]>;
   generate: typeof generateAgentText;
-  tools: ToolSet;
+  buildTools: (identity: ChatIdentity) => ToolSet;
   onBudgetAlert?: (status: BudgetStatus, monthCostBrl: number) => Promise<void>;
 };
 
-export function buildTools(): ToolSet {
+function saveMemoryTool(): ToolSet {
   return {
     save_memory: tool({
       description:
@@ -38,6 +42,22 @@ export function buildTools(): ToolSet {
   };
 }
 
+export function buildTools(identity: ChatIdentity): ToolSet {
+  const cfg = getConfig();
+  return {
+    ...saveMemoryTool(),
+    ...buildTaskTools(identity),
+    ...buildShoppingTools(identity),
+    ...(hasGoogleCreds(cfg)
+      ? buildCalendarTools(identity, {
+          getUserBySubject,
+          calendar: calendarApiFromGoogle(getCalendarClient(cfg), cfg.TIMEZONE),
+          timezone: cfg.TIMEZONE,
+        })
+      : {}),
+  };
+}
+
 export function defaultAgentDeps(
   onBudgetAlert?: AgentDeps['onBudgetAlert'],
 ): AgentDeps {
@@ -47,7 +67,7 @@ export function defaultAgentDeps(
     getRecentMessages,
     recall: recallMemories,
     generate: generateAgentText,
-    tools: buildTools(),
+    buildTools,
     onBudgetAlert,
   };
 }
@@ -76,7 +96,7 @@ export async function handleMessage(
     purpose: 'chat',
     system,
     messages: [...past, { role: 'user', content: msg.text }],
-    tools: deps.tools,
+    tools: deps.buildTools(identity),
     onBudgetAlert: deps.onBudgetAlert,
   });
 
