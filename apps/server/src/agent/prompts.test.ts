@@ -56,4 +56,11 @@ describe('buildSystemPrompt', () => {
     const p = buildSystemPrompt({ ...args, hasCalendar: false }).toLowerCase();
     expect(p).not.toContain('calendar_');
   });
+
+  it('instrui estilo: sem ids na resposta, sem ofertas extras, uma pergunta por vez', () => {
+    const p = buildSystemPrompt(args).toLowerCase();
+    expect(p).toContain('nunca mostre ids');
+    expect(p).toContain('uma pergunta por vez');
+    expect(p).toContain('não termine oferecendo');
+  });
 });
