@@ -53,6 +53,16 @@ describe('buildTaskTools', () => {
     expect(out).toContain('Pagar boleto');
   });
 
+  it('erro de banco ao resolver owner no privado vira FAIL, não ASK_OWNER', async () => {
+    const { deps } = makeDeps();
+    deps.getUserBySubject = async () => {
+      throw new Error('db down');
+    };
+    const out = await exec(buildTaskTools(luis, deps), 'tasks_list', {});
+    expect(out.toLowerCase()).toContain('não consegui');
+    expect(out.toLowerCase()).not.toContain('de quem');
+  });
+
   it('erro do repo vira mensagem amigável', async () => {
     const { deps } = makeDeps();
     deps.listTasks = async () => {

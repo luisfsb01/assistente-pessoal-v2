@@ -22,14 +22,11 @@ const ownerParam = z
 const ASK_OWNER = 'Preciso saber de quem é a tarefa — especifique owner: luis ou esposa.';
 const FAIL = 'Não consegui acessar as tarefas agora. Tenta de novo em instantes.';
 
-async function resolveUser(
-  deps: TaskToolDeps,
+function resolveSubject(
   identity: ChatIdentity,
   owner?: 'luis' | 'esposa',
-): Promise<UserRecord | null> {
-  const subject = owner ?? identity.subject;
-  if (!subject) return null;
-  return deps.getUserBySubject(subject);
+): 'luis' | 'esposa' | null {
+  return owner ?? identity.subject;
 }
 
 export function buildTaskTools(identity: ChatIdentity, deps: TaskToolDeps = defaultDeps): ToolSet {
@@ -38,9 +35,11 @@ export function buildTaskTools(identity: ChatIdentity, deps: TaskToolDeps = defa
       description: 'Lista tarefas de uma pessoa (abertas por padrão).',
       inputSchema: z.object({ owner: ownerParam, status: z.enum(['open', 'done']).optional() }),
       execute: async ({ owner, status }) => {
-        const user = await resolveUser(deps, identity, owner).catch(() => null);
-        if (!user) return ASK_OWNER;
+        const subject = resolveSubject(identity, owner);
+        if (!subject) return ASK_OWNER;
         try {
+          const user = await deps.getUserBySubject(subject);
+          if (!user) return FAIL;
           const tasks = await deps.listTasks(user.id, status ?? 'open');
           if (tasks.length === 0)
             return `Nenhuma tarefa ${status === 'done' ? 'concluída' : 'aberta'} de ${user.name}.`;
@@ -58,9 +57,11 @@ export function buildTaskTools(identity: ChatIdentity, deps: TaskToolDeps = defa
         owner: ownerParam,
       }),
       execute: async ({ title, due_date, owner }) => {
-        const user = await resolveUser(deps, identity, owner).catch(() => null);
-        if (!user) return ASK_OWNER;
+        const subject = resolveSubject(identity, owner);
+        if (!subject) return ASK_OWNER;
         try {
+          const user = await deps.getUserBySubject(subject);
+          if (!user) return FAIL;
           const t = await deps.addTask(user.id, title, due_date);
           return `Tarefa criada para ${user.name}: "${t.title}"${t.dueDate ? ` (prazo ${t.dueDate})` : ''}.`;
         } catch {
