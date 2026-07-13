@@ -89,6 +89,8 @@ export function buildTaskTools(identity: ChatIdentity, deps: TaskToolDeps = defa
         due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
       }),
       execute: async ({ task_id, title, due_date }) => {
+        if (title === undefined && due_date === undefined)
+          return 'Nada para atualizar — informe título e/ou prazo.';
         try {
           await deps.updateTask(task_id, { title, dueDate: due_date });
           return 'Tarefa atualizada.';

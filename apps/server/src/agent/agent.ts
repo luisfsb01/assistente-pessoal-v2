@@ -87,7 +87,13 @@ export async function handleMessage(
   ]);
 
   const cfg = getConfig();
-  const system = buildSystemPrompt({ identity, memories, now: new Date(), timezone: cfg.TIMEZONE });
+  const system = buildSystemPrompt({
+    identity,
+    memories,
+    now: new Date(),
+    timezone: cfg.TIMEZONE,
+    hasCalendar: hasGoogleCreds(cfg),
+  });
 
   // histórico já inclui a mensagem recém-salva em produção; em fakes pode não incluir —
   // garante que a última mensagem é a atual sem duplicar

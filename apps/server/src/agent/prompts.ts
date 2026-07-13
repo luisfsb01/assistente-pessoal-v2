@@ -12,8 +12,9 @@ export function buildSystemPrompt(args: {
   memories: Memory[];
   now: Date;
   timezone: string;
+  hasCalendar: boolean;
 }): string {
-  const { identity, memories, now, timezone } = args;
+  const { identity, memories, now, timezone, hasCalendar } = args;
   const dateStr = now.toLocaleString('pt-BR', { timeZone: timezone, dateStyle: 'full', timeStyle: 'short' });
 
   const who =
@@ -33,16 +34,19 @@ export function buildSystemPrompt(args: {
       ? 'No grupo, sempre que a pessoa não deixar claro de quem é a tarefa/evento/lista, especifique o owner (luis ou esposa) — pergunte se não estiver óbvio pelo contexto ou por quem está falando.'
       : 'No privado, o padrão é que tarefas e agenda são do dono do chat, salvo se a pessoa pedir explicitamente algo do outro.';
 
+  const agendaBullet = hasCalendar
+    ? `\n- Agenda: cada pessoa tem sua própria agenda do Google Calendar (tools calendar_list_events, calendar_create_event, calendar_update_event, calendar_delete_event). Resolva datas relativas ("amanhã", "sexta que vem", "semana que vem") usando a data atual acima antes de chamar as tools.`
+    : '';
+
   const capabilities = `
 
 Capacidades:
-- Tarefas: cada pessoa tem sua própria lista de tarefas (tools tasks_list, tasks_add, tasks_complete, tasks_update). ${ownerNote}
-- Agenda: cada pessoa tem sua própria agenda do Google Calendar (tools calendar_list_events, calendar_create_event, calendar_update_event, calendar_delete_event). Resolva datas relativas ("amanhã", "sexta que vem", "semana que vem") usando a data atual acima antes de chamar as tools.
+- Tarefas: cada pessoa tem sua própria lista de tarefas (tools tasks_list, tasks_add, tasks_complete, tasks_update). ${ownerNote}${agendaBullet}
 - Lista de compras: uma lista de compras única do casal (tools shopping_list, shopping_add, shopping_remove, shopping_clear) — mora no grupo, mas também está acessível nos chats privados.
 
 Instruções para usar as tools:
-- Para concluir ou remover uma tarefa, um evento ou um item, primeiro liste (tasks_list/calendar_list_events/shopping_list) para conseguir o id correto — nunca invente um id.
-- Antes de chamar shopping_clear ou calendar_delete_event, confirme com o usuário na conversa que é isso mesmo que ele quer, e só chame a tool depois da confirmação.`;
+- Para concluir ou remover ${hasCalendar ? 'uma tarefa, um evento ou um item' : 'uma tarefa ou um item'}, primeiro liste (${hasCalendar ? 'tasks_list/calendar_list_events/shopping_list' : 'tasks_list/shopping_list'}) para conseguir o id correto — nunca invente um id.
+- Antes de chamar ${hasCalendar ? 'shopping_clear ou calendar_delete_event' : 'shopping_clear'}, confirme com o usuário na conversa que é isso mesmo que ele quer, e só chame a tool depois da confirmação.`;
 
   return `Você é o assistente pessoal do Luis e da esposa dele. Converse em português brasileiro, com naturalidade e concisão — nada de tom corporativo.
 

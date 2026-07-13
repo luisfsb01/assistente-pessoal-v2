@@ -15,6 +15,9 @@ services:
       - LLM_BUDGET_BRL=${LLM_BUDGET_BRL}
       - USD_BRL_RATE=${USD_BRL_RATE}
       - TIMEZONE=${TIMEZONE}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - GOOGLE_REFRESH_TOKEN=${GOOGLE_REFRESH_TOKEN:-}
       - PORT=8080
     networks:
       - projetonet

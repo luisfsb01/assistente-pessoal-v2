@@ -21,6 +21,7 @@ describe('buildSystemPrompt', () => {
     memories: [{ id: 'm1', subject: 'luis' as const, type: 'preference' as const, content: 'Prefere reuniões à tarde' }],
     now: new Date('2026-07-08T12:00:00Z'),
     timezone: 'America/Sao_Paulo',
+    hasCalendar: true,
   };
 
   it('inclui nome do usuário, memórias e data', () => {
@@ -49,5 +50,10 @@ describe('buildSystemPrompt', () => {
   it('no grupo, menciona lista de compras', () => {
     const p = buildSystemPrompt({ ...args, identity: grupo, memories: [] }).toLowerCase();
     expect(p).toContain('lista de compras');
+  });
+
+  it('sem calendário configurado, não menciona tools calendar_', () => {
+    const p = buildSystemPrompt({ ...args, hasCalendar: false }).toLowerCase();
+    expect(p).not.toContain('calendar_');
   });
 });

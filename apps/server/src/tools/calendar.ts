@@ -52,6 +52,19 @@ export function zonedDayEndIso(date: string, tz: string): string {
   return `${date}T23:59:59${offsetForZone(date, tz)}`;
 }
 
+/**
+ * Datetimes sem Z/offset (ex.: "2026-07-16T15:00:00") são ambíguos: o Google interpreta
+ * o `start` no timezone informado (America/Sao_Paulo), mas se calculássemos o `end` padrão
+ * via `new Date(iso).toISOString()` o parse seria feito no timezone do processo (UTC no
+ * container) — gerando um `end` incoerente. Normalizamos anexando o offset real do timezone
+ * antes de qualquer cálculo, para que tudo opere sobre o instante correto.
+ */
+export function normalizeIso(iso: string, tz: string): string {
+  if (/Z$|[+-]\d{2}:\d{2}$/.test(iso)) return iso;
+  const date = iso.slice(0, 10);
+  return `${iso}${offsetForZone(date, tz)}`;
+}
+
 function addDays(date: string, days: number): string {
   const [y, m, d] = date.split('-').map(Number);
   const dt = new Date(Date.UTC(y, m - 1, d));
@@ -152,7 +165,7 @@ export function buildCalendarTools(identity: ChatIdentity, deps: CalendarToolDep
     }),
     calendar_create_event: tool({
       description:
-        'Cria um evento na agenda. Use start (ISO com hora) para eventos com hora (end padrão +1h), ou all_day + date (YYYY-MM-DD) para dia inteiro — end_date opcional é o ÚLTIMO dia, inclusivo.',
+        'Cria um evento na agenda. Use start (ISO com hora) para eventos com hora (end padrão +1h), ou all_day + date (YYYY-MM-DD) para dia inteiro — end_date opcional é o ÚLTIMO dia, inclusivo. Datetimes sem offset (ex.: "2026-07-16T15:00:00") são interpretados no fuso de São Paulo.',
       inputSchema: z.object({
         title: z.string(),
         start: z.string().optional(),
@@ -181,12 +194,15 @@ export function buildCalendarTools(identity: ChatIdentity, deps: CalendarToolDep
             return `A agenda de ${user.name} ainda não foi configurada (users.calendar_id).`;
           // Google trata end.date de eventos all-day como EXCLUSIVO; end_date aqui é inclusivo,
           // então somamos 1 dia ao último dia informado (ou ao próprio date).
+          const startIso = all_day ? undefined : normalizeIso(start!, deps.timezone);
           const body = all_day
             ? { title, startDate: date!, endDate: addDays(end_date ?? date!, 1) }
             : {
                 title,
-                startIso: start!,
-                endIso: end ?? new Date(new Date(start!).getTime() + 60 * 60 * 1000).toISOString(),
+                startIso: startIso!,
+                endIso: end
+                  ? normalizeIso(end, deps.timezone)
+                  : new Date(new Date(startIso!).getTime() + 60 * 60 * 1000).toISOString(),
               };
           const created = await deps.calendar.insertEvent(user.calendarId, body);
           return `Evento criado para ${user.name}: "${created.title}".`;
@@ -196,7 +212,8 @@ export function buildCalendarTools(identity: ChatIdentity, deps: CalendarToolDep
       },
     }),
     calendar_update_event: tool({
-      description: 'Atualiza título e/ou horário de um evento (use o id retornado por calendar_list_events).',
+      description:
+        'Atualiza título e/ou horário de um evento (use o id retornado por calendar_list_events). Datetimes sem offset são interpretados no fuso de São Paulo.',
       inputSchema: z.object({
         event_id: z.string(),
         owner: ownerParam,
@@ -214,8 +231,8 @@ export function buildCalendarTools(identity: ChatIdentity, deps: CalendarToolDep
             return `A agenda de ${user.name} ainda não foi configurada (users.calendar_id).`;
           await deps.calendar.patchEvent(user.calendarId, event_id, {
             title,
-            startIso: start,
-            endIso: end,
+            startIso: start ? normalizeIso(start, deps.timezone) : undefined,
+            endIso: end ? normalizeIso(end, deps.timezone) : undefined,
           });
           return 'Evento atualizado.';
         } catch {

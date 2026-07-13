@@ -71,4 +71,11 @@ describe('buildTaskTools', () => {
     const out = await exec(buildTaskTools(luis, deps), 'tasks_list', {});
     expect(out.toLowerCase()).toContain('não consegui');
   });
+
+  it('tasks_update sem title nem due_date: não chama o repo, retorna aviso', async () => {
+    const { deps, calls } = makeDeps();
+    const out = await exec(buildTaskTools(luis, deps), 'tasks_update', { task_id: 't1' });
+    expect(calls).toEqual([]);
+    expect(out).toBe('Nada para atualizar — informe título e/ou prazo.');
+  });
 });

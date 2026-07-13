@@ -154,4 +154,19 @@ describe('buildCalendarTools', () => {
     const iso = zonedDayStartIso('2026-07-20', 'America/Sao_Paulo');
     expect(iso).toMatch(/^2026-07-20T00:00:00-03:00$/);
   });
+
+  it('start ISO naive (sem offset) é normalizado para o fuso de São Paulo e o end padrão fica correto', async () => {
+    const { deps, calls } = makeDeps();
+    await exec(buildCalendarTools(luis, deps), 'calendar_create_event', {
+      title: 'Dentista',
+      start: '2026-07-16T15:00:00',
+    });
+    expect(calls).toHaveLength(1);
+    const insertCall = calls[0];
+    const body = JSON.parse(insertCall.slice(insertCall.indexOf('{')));
+    const { startIso, endIso } = body as { startIso: string; endIso: string };
+    expect(startIso).toContain('-03:00');
+    expect(new Date(startIso).toISOString()).toBe('2026-07-16T18:00:00.000Z');
+    expect(new Date(endIso).getTime() - new Date(startIso).getTime()).toBe(3600000);
+  });
 });
