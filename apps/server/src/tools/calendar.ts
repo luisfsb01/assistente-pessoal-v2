@@ -38,6 +38,8 @@ function offsetForZone(date: string, tz: string): string {
     timeZoneName: 'longOffset',
   }).formatToParts(probe);
   const raw = parts.find((p) => p.type === 'timeZoneName')?.value ?? 'GMT+00:00';
+  // Em UTC/offset zero alguns runtimes formatam apenas "GMT" (sem "+00:00").
+  if (raw === 'GMT') return '+00:00';
   const match = /GMT([+-]\d{2}:\d{2})/.exec(raw);
   return match ? match[1] : '+00:00';
 }
@@ -150,16 +152,21 @@ export function buildCalendarTools(identity: ChatIdentity, deps: CalendarToolDep
     }),
     calendar_create_event: tool({
       description:
-        'Cria um evento na agenda. Use start (ISO com hora) para eventos com hora (end padrão +1h), ou all_day + date (YYYY-MM-DD) para o dia inteiro.',
+        'Cria um evento na agenda. Use start (ISO com hora) para eventos com hora (end padrão +1h), ou all_day + date (YYYY-MM-DD) para dia inteiro — end_date opcional é o ÚLTIMO dia, inclusivo.',
       inputSchema: z.object({
         title: z.string(),
         start: z.string().optional(),
         end: z.string().optional(),
         all_day: z.boolean().optional(),
         date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        end_date: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional()
+          .describe('Último dia do evento all-day (inclusivo); padrão é o mesmo dia de date'),
         owner: ownerParam,
       }),
-      execute: async ({ title, start, end, all_day, date, owner }) => {
+      execute: async ({ title, start, end, all_day, date, end_date, owner }) => {
         const subject = resolveSubject(identity, owner);
         if (!subject) return ASK_OWNER;
         if (all_day) {
@@ -172,8 +179,10 @@ export function buildCalendarTools(identity: ChatIdentity, deps: CalendarToolDep
           if (!user) return FAIL;
           if (!user.calendarId)
             return `A agenda de ${user.name} ainda não foi configurada (users.calendar_id).`;
+          // Google trata end.date de eventos all-day como EXCLUSIVO; end_date aqui é inclusivo,
+          // então somamos 1 dia ao último dia informado (ou ao próprio date).
           const body = all_day
-            ? { title, startDate: date!, endDate: end ?? addDays(date!, 1) }
+            ? { title, startDate: date!, endDate: addDays(end_date ?? date!, 1) }
             : {
                 title,
                 startIso: start!,

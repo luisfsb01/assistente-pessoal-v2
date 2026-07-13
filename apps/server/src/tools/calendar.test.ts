@@ -86,6 +86,20 @@ describe('buildCalendarTools', () => {
     expect(out).toContain('Viagem');
   });
 
+  it('all_day de vários dias: end_date é inclusivo (Google usa fim exclusivo => +1 dia)', async () => {
+    const { deps, calls } = makeDeps();
+    const out = await exec(buildCalendarTools(luis, deps), 'calendar_create_event', {
+      title: 'Viagem',
+      all_day: true,
+      date: '2026-07-20',
+      end_date: '2026-07-25',
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain('"startDate":"2026-07-20"');
+    expect(calls[0]).toContain('"endDate":"2026-07-26"');
+    expect(out).toContain('Viagem');
+  });
+
   it('grupo sem owner: pede para especificar', async () => {
     const { deps, calls } = makeDeps();
     const out = await exec(buildCalendarTools(grupo, deps), 'calendar_list_events', {
