@@ -16,9 +16,9 @@ import {
   setTransactionCategory,
   type Transaction,
 } from '../db/finance.js';
-import { rootCategoryOf } from '../lib/category-tree.js';
 import { getConfig } from '../lib/config.js';
 import { todayInTz } from '../lib/dates.js';
+import { aggregateMonth, lastDayOfMonth } from '../services/month-summary.js';
 
 export type FinanceToolDeps = {
   listCategories: typeof listCategories;
@@ -56,12 +56,6 @@ const defaultDeps: FinanceToolDeps = {
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const FAIL = 'Não consegui acessar as finanças agora. Tenta de novo em instantes.';
-
-/** Último dia do mês YYYY-MM em YYYY-MM-DD. */
-function lastDayOfMonth(month: string): string {
-  const [y, m] = month.split('-').map(Number);
-  return `${month}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, '0')}`;
-}
 
 /** Resolve uma transação por código de revisão (A001) ou id. */
 async function resolveTx(
@@ -146,43 +140,7 @@ export function buildFinanceTools(deps: FinanceToolDeps = defaultDeps): ToolSet 
             deps.listTransactionsBetween(`${m}-01`, lastDayOfMonth(m)),
             deps.listCategories(),
           ]);
-          let income = 0;
-          let expense = 0;
-          let invested = 0;
-          let pendingReview = 0;
-          const spentByRoot = new Map<string, number>();
-          for (const t of txs) {
-            if (t.status === 'pending_review') pendingReview++;
-            const root = t.category_id ? rootCategoryOf(t.category_id, cats) : null;
-            if (root && root.counts === false) continue; // transferências etc. não contam
-            const amount = Number(t.amount);
-            if (root?.type === 'investment') {
-              invested += amount;
-              continue;
-            }
-            if (t.kind === 'income') {
-              income += amount;
-            } else {
-              expense += amount;
-              const key = root?.name ?? 'Sem categoria';
-              spentByRoot.set(key, (spentByRoot.get(key) ?? 0) + amount);
-            }
-          }
-          const targetByName = new Map(
-            cats.filter((c) => !c.parent_id && c.monthly_target != null).map((c) => [c.name, Number(c.monthly_target)]),
-          );
-          const byCategory = [...spentByRoot.entries()]
-            .sort((a, b) => b[1] - a[1])
-            .map(([category, spent]) => ({ category, spent, target: targetByName.get(category) ?? null }));
-          return JSON.stringify({
-            month: m,
-            income,
-            expense,
-            invested,
-            balance: income - expense - invested,
-            pending_review: pendingReview,
-            by_category: byCategory,
-          });
+          return JSON.stringify(aggregateMonth(m, txs, cats));
         } catch {
           return FAIL;
         }
