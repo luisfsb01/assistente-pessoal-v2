@@ -34,6 +34,10 @@ insert into chats (id, kind, user_id) values
 Já preenchido neste repositório (token do bot da v1, chave OpenAI, mesmo
 Supabase). Conferir apenas se `LLM_BUDGET_BRL` e os modelos estão como quer.
 
+```
+BANCO_MCP_TOKEN=            # token do Banco MCP (app.mcp.ai/agent-auth?toolkit=tk_pub_openfinance); vazio desliga a importação bancária
+```
+
 ## 4. Validar localmente
 
 1. Desligar a v1 no VPS.

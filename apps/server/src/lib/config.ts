@@ -16,6 +16,7 @@ const schema = z.object({
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   GOOGLE_REFRESH_TOKEN: z.string().optional(),
+  BANCO_MCP_TOKEN: z.string().default(''),
 });
 
 export type Config = z.infer<typeof schema>;
