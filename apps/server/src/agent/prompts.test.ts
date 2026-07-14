@@ -63,4 +63,15 @@ describe('buildSystemPrompt', () => {
     expect(p).toContain('uma pergunta por vez');
     expect(p).toContain('não termine oferecendo');
   });
+
+  it('menciona finanças e as tools de finanças', () => {
+    const p = buildSystemPrompt(args).toLowerCase();
+    expect(p).toContain('finance_month_summary');
+    expect(p).toContain('finanças');
+  });
+
+  it('instrui sobre códigos de revisão e classificação', () => {
+    const p = buildSystemPrompt(args).toLowerCase();
+    expect(p).toContain('a001');
+  });
 });

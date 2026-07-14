@@ -48,6 +48,9 @@ describe('pickModelId', () => {
   it('orçamento estourado degrada tudo para o default', () => {
     expect(pickModelId('briefing', 'exceeded', cfg)).toBe(cfg.MODEL_DEFAULT_ID);
   });
+  it('categorize usa o modelo default mesmo com orçamento ok', () => {
+    expect(pickModelId('categorize', 'ok', cfg)).toBe(cfg.MODEL_DEFAULT_ID);
+  });
 });
 
 describe('generateAgentText', () => {

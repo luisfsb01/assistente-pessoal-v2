@@ -10,6 +10,7 @@ import { embedText } from '../memory/embeddings.js';
 import { recallMemories } from '../memory/recall.js';
 import { buildTaskTools } from '../tools/tasks.js';
 import { buildShoppingTools } from '../tools/shopping.js';
+import { buildFinanceTools } from '../tools/finance.js';
 import { buildCalendarTools, calendarApiFromGoogle } from '../tools/calendar.js';
 import { generateAgentText } from './models.js';
 import { buildSystemPrompt, subjectsForChat } from './prompts.js';
@@ -48,6 +49,7 @@ export function buildTools(identity: ChatIdentity): ToolSet {
     ...saveMemoryTool(),
     ...buildTaskTools(identity),
     ...buildShoppingTools(identity),
+    ...buildFinanceTools(),
     ...(hasGoogleCreds(cfg)
       ? buildCalendarTools(identity, {
           getUserBySubject,

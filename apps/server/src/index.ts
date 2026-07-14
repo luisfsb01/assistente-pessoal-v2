@@ -22,7 +22,7 @@ async function main() {
   };
   const agentDeps = defaultAgentDeps(createBudgetAlert({ send: sendToLuis, getState, setState }));
 
-  startScheduler();
+  startScheduler(bot);
   startWebServer(cfg);
   console.log('[bot] iniciando long polling…');
   await bot.start();

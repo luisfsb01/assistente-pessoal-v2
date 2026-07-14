@@ -18,6 +18,7 @@ services:
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
       - GOOGLE_REFRESH_TOKEN=${GOOGLE_REFRESH_TOKEN:-}
+      - BANCO_MCP_TOKEN=${BANCO_MCP_TOKEN:-}
       - PORT=8080
     networks:
       - projetonet
