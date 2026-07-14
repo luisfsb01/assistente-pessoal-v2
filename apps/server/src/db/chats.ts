@@ -36,3 +36,14 @@ export async function getUserBySubject(subject: 'luis' | 'esposa'): Promise<User
   if (!data) return null;
   return { id: data.id, name: data.name, calendarId: data.calendar_id ?? null };
 }
+
+/** chat_id do Telegram do privado de um usuário (para jobs que enviam mensagem direta). */
+export async function getSubjectChatId(subject: 'luis' | 'esposa'): Promise<number | null> {
+  const { data, error } = await supabase
+    .from('users')
+    .select('telegram_chat_id')
+    .eq('subject', subject)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? Number(data.telegram_chat_id) : null;
+}
