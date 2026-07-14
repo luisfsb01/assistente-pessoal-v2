@@ -51,6 +51,9 @@ describe('pickModelId', () => {
   it('categorize usa o modelo default mesmo com orçamento ok', () => {
     expect(pickModelId('categorize', 'ok', cfg)).toBe(cfg.MODEL_DEFAULT_ID);
   });
+  it('judgment usa o modelo default mesmo com orçamento ok', () => {
+    expect(pickModelId('judgment', 'ok', cfg)).toBe(cfg.MODEL_DEFAULT_ID);
+  });
 });
 
 describe('generateAgentText', () => {
