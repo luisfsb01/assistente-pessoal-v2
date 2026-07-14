@@ -47,3 +47,15 @@ export async function getSubjectChatId(subject: 'luis' | 'esposa'): Promise<numb
   if (error) throw error;
   return data ? Number(data.telegram_chat_id) : null;
 }
+
+/** chat_id do grupo do casal (primeiro chat kind='group'); null se não cadastrado. */
+export async function getGroupChatId(): Promise<number | null> {
+  const { data, error } = await supabase
+    .from('chats')
+    .select('id')
+    .eq('kind', 'group')
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? Number(data.id) : null;
+}
