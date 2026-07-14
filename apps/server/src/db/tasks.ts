@@ -47,3 +47,16 @@ export async function updateTask(
   const { error } = await supabase.from('tasks').update(row).eq('id', taskId);
   if (error) throw error;
 }
+
+export type TaskWithAge = Task & { createdAt: string };
+
+/** Tarefas abertas com created_at (para detectar tarefa parada). */
+export async function listOpenTasksWithAge(userId: string): Promise<TaskWithAge[]> {
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('id, title, status, due_date, created_at')
+    .eq('user_id', userId)
+    .eq('status', 'open');
+  if (error) throw error;
+  return (data ?? []).map((r) => ({ ...toTask(r), createdAt: r.created_at as string }));
+}
