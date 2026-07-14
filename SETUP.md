@@ -79,6 +79,13 @@ validada no VPS.
      GOOGLE_REFRESH_TOKEN) para o arquivo `.env` do VPS.
    - Rodar: `FORCE=1 bash scripts/deploy-pull.sh`.
 
+## 6. Fase 4 (proatividade + briefing)
+
+1. **Migração**: executar `supabase/migrations/0003_fase4.sql` (SQL Editor ou Management API).
+2. Nada novo no `.env` — os coletores usam as credenciais já existentes (Google/Banco MCP); sem elas, o coletor correspondente fica desligado.
+3. Regras de respeito: silêncio 22:00–07:00 e máx. 5 notificações/dia por pessoa (defaults; ajustáveis na chave `proactivity_config` do `app_state` até a UI da Fase 8).
+4. Testes manuais: `npm run job:proactive -w apps/server` (um ciclo de coleta+julgamento+entrega) e `npm run job:briefing -w apps/server` (briefing na hora).
+
 ## Notas
 
 - O web app da v1 sai do ar junto com a v1; ele volta servido pela v2

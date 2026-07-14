@@ -8,7 +8,9 @@
     "typecheck": "tsc --noEmit",
     "job:reflect": "tsx src/scripts/run-reflection.ts",
     "job:finance": "tsx src/scripts/run-finance-review.ts",
-    "google:calendars": "tsx src/scripts/google-calendars.ts"
+    "google:calendars": "tsx src/scripts/google-calendars.ts",
+    "job:briefing": "tsx src/scripts/run-briefing.ts",
+    "job:proactive": "tsx src/scripts/run-proactive.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^2.0.0",
