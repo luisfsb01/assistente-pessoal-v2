@@ -302,3 +302,30 @@ export async function getLastImportedDate(): Promise<string | null> {
 export async function setLastImportedDate(date: string): Promise<void> {
   await setState(LAST_IMPORT_KEY, date);
 }
+
+/** Despesas vindas do banco desde uma data (para o coletor de proatividade). */
+export async function listRecentBankExpenses(sinceDate: string): Promise<Transaction[]> {
+  const { data, error } = await supabase
+    .from('transactions')
+    .select(TX_COLS)
+    .eq('source', 'bank')
+    .eq('kind', 'expense')
+    .gte('occurred_on', sinceDate)
+    .order('occurred_on', { ascending: false });
+  if (error) throw error;
+  return data as Transaction[];
+}
+
+/** Média e contagem das despesas de uma categoria desde uma data (base do "gasto atípico"). */
+export async function categoryExpenseAvg(categoryId: string, sinceDate: string): Promise<{ avg: number; count: number }> {
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('amount')
+    .eq('category_id', categoryId)
+    .eq('kind', 'expense')
+    .gte('occurred_on', sinceDate);
+  if (error) throw error;
+  const amounts = (data ?? []).map((r) => Number(r.amount));
+  if (amounts.length === 0) return { avg: 0, count: 0 };
+  return { avg: amounts.reduce((a, b) => a + b, 0) / amounts.length, count: amounts.length };
+}
