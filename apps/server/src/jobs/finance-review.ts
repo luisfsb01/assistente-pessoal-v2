@@ -99,7 +99,7 @@ export async function runFinanceReview(bot: Bot): Promise<void> {
   // 4) uma mensagem por transação, com botão ✅
   await bot.api.sendMessage(
     chatId,
-    `💸 Gastos para revisar (${pending.length})${extra > 0 ? `, mostrando os ${toReview.length} mais recentes:` : ':'}`,
+    `💸 Gastos para revisar (${pending.length})${extra > 0 ? `, mostrando os ${toReview.length} mais antigos:` : ':'}`,
   );
   for (const t of toReview) {
     const suggested = suggestions.get(t.id);

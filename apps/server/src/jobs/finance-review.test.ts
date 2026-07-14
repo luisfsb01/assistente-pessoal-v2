@@ -1,3 +1,4 @@
+import '../test-setup.js';
 import { describe, expect, it } from 'vitest';
 import { formatReviewLine } from './finance-review.js';
 

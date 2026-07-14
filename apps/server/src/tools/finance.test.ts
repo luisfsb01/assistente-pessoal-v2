@@ -1,3 +1,4 @@
+import '../test-setup.js';
 import { describe, expect, it } from 'vitest';
 import type { Category, Transaction } from '../db/finance.js';
 import { buildFinanceTools, type FinanceToolDeps } from './finance.js';

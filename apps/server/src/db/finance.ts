@@ -203,7 +203,7 @@ export function normalizePattern(desc: string): string {
   return desc
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '') // remove acentos (marcas combinantes do NFD)
+    .replace(/[\u0300-\u036f]/g, '') // remove acentos (marcas combinantes do NFD)
     .replace(/[0-9]/g, ' ')
     .replace(/[^a-z\s]/g, ' ')
     .replace(/\s+/g, ' ')

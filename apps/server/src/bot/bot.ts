@@ -19,7 +19,9 @@ export function createBot(
       const ok = await confirmTransaction(action.txId);
       await ctx.answerCallbackQuery({ text: ok ? 'Confirmado ✅' : 'Não encontrada' });
       if (!ok) return;
-      await ctx.editMessageText(`✅ ${ctx.callbackQuery.message?.text?.split('\n')[0] ?? 'Gasto confirmado'}`);
+      await ctx
+        .editMessageText(`✅ ${ctx.callbackQuery.message?.text?.split('\n')[0] ?? 'Gasto confirmado'}`)
+        .catch(() => {});
       // confirmar = endossar a categoria mostrada → aprende a regra (nunca quebra o fluxo)
       try {
         const tx = await getTransactionById(action.txId);

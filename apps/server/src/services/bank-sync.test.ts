@@ -1,3 +1,4 @@
+import '../test-setup.js';
 import { describe, expect, it } from 'vitest';
 import type { Transaction } from '../db/finance.js';
 import { syncBankTransactions, type BankSyncDeps } from './bank-sync.js';

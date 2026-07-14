@@ -1,3 +1,4 @@
+import '../test-setup.js';
 import { describe, expect, it } from 'vitest';
 import type { Category } from '../db/finance.js';
 import { suggestCategoriesFor, type CategorizeDeps } from './categorize.js';
