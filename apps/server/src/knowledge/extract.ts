@@ -99,7 +99,13 @@ export async function extractFromUrl(
     console.error('[extract] extração falhou (salvando como link):', err);
   }
   // Fallback: guarda o link e a nota do Luis — captura nunca falha por extração
-  const title = note?.trim() ? note.trim().slice(0, 60) : new URL(url).hostname;
+  let host = url;
+  try {
+    host = new URL(url).hostname;
+  } catch {
+    // url malformada: usa a string crua como título mesmo
+  }
+  const title = note?.trim() ? note.trim().slice(0, 60) : host;
   const markdown = [url, ...(note ? ['', note] : [])].join('\n');
   return { kind: 'link', title, markdown };
 }

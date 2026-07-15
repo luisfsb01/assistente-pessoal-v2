@@ -77,4 +77,11 @@ describe('extractFromUrl', () => {
     expect(out.kind).toBe('link');
     expect(out.title).toBe('blog.example.com');
   });
+
+  it('URL malformada sem nota não lança — vira link com a própria string', async () => {
+    const fetcher: Fetcher = async () => ({ ok: true, text: async () => '' });
+    const out = await extractFromUrl('example.com/post', undefined, fetcher);
+    expect(out.kind).toBe('link');
+    expect(out.title).toBe('example.com/post');
+  });
 });
