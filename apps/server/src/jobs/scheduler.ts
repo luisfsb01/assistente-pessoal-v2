@@ -7,6 +7,7 @@ import { runReflection } from '../memory/reflection.js';
 import { runFinanceReview } from './finance-review.js';
 import { runDailyBriefing, runCoupleBriefing } from './briefing.js';
 import { runProactiveCycle, type CollectorSource } from '../proactive/engine.js';
+import { runEmailCleanup } from './email-cleanup.js';
 
 export function startScheduler(bot: Bot): void {
   const cfg = getConfig();
@@ -29,6 +30,12 @@ export function startScheduler(bot: Bot): void {
   if (isBankConfigured()) cron.schedule('0 */2 * * *', cycle(['finance'], 'finance'), opts);
   cron.schedule('30 6 * * *', cycle(['tasks'], 'tasks'), opts);
 
+  // Limpeza do Gmail (Fase 5): 30 em 30 min; sem escopo gmail.modify o job só loga o erro
+  if (hasGoogleCreds(cfg))
+    cron.schedule('*/30 * * * *', () => {
+      runEmailCleanup().catch((err) => console.error('[job:email-cleanup]', err));
+    }, opts);
+
   // Briefing matinal (modelo forte) + visão do casal aos sábados
   cron.schedule('0 7 * * *', () => {
     runDailyBriefing(send).catch((err) => console.error('[job:briefing]', err));
@@ -38,6 +45,6 @@ export function startScheduler(bot: Bot): void {
   }, opts);
 
   console.log(
-    `[scheduler] reflexão 03:00, revisão financeira 08:00, briefing 07:00 (+casal sáb 08:00), coletores: calendário ${hasGoogleCreds(cfg) ? '30min' : 'off'}, banco ${isBankConfigured() ? '2h' : 'off'}, tarefas 06:30 — ${cfg.TIMEZONE}`,
+    `[scheduler] reflexão 03:00, revisão financeira 08:00, briefing 07:00 (+casal sáb 08:00), coletores: calendário ${hasGoogleCreds(cfg) ? '30min' : 'off'}, banco ${isBankConfigured() ? '2h' : 'off'}, tarefas 06:30, gmail ${hasGoogleCreds(cfg) ? '30min' : 'off'} — ${cfg.TIMEZONE}`,
   );
 }

@@ -10,7 +10,8 @@
     "job:finance": "tsx src/scripts/run-finance-review.ts",
     "google:calendars": "tsx src/scripts/google-calendars.ts",
     "job:briefing": "tsx src/scripts/run-briefing.ts",
-    "job:proactive": "tsx src/scripts/run-proactive.ts"
+    "job:proactive": "tsx src/scripts/run-proactive.ts",
+    "job:email-cleanup": "tsx src/scripts/run-email-cleanup.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^2.0.0",

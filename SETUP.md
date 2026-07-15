@@ -86,6 +86,27 @@ validada no VPS.
 3. Regras de respeito: silêncio 22:00–07:00 e máx. 5 notificações/dia por pessoa (defaults; ajustáveis na chave `proactivity_config` do `app_state` até a UI da Fase 8).
 4. Testes manuais: `npm run job:proactive -w apps/server` (um ciclo de coleta+julgamento+entrega) e `npm run job:briefing -w apps/server` (briefing na hora).
 
+## 7. Fase 5 (limpeza do Gmail + briefing)
+
+1. **Migração**: executar `supabase/migrations/0004_fase5.sql` (SQL Editor ou Management API).
+2. **Novo refresh token** (o atual só tem escopo de Calendar):
+   - No Google Cloud Console, no OAuth client atual, conferir se
+     `https://developers.google.com/oauthplayground` está em "Authorized
+     redirect URIs" (adicionar se faltar).
+   - No [OAuth Playground](https://developers.google.com/oauthplayground):
+     engrenagem → "Use your own OAuth credentials" → colar CLIENT_ID/SECRET
+     do `.env`.
+   - Autorizar os DOIS escopos de uma vez (conta do Luis):
+     `https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/gmail.modify`
+   - "Exchange authorization code for tokens" → copiar o **refresh_token**
+     para `GOOGLE_REFRESH_TOKEN` no `.env` local E no do VPS.
+   - `gmail.modify` NÃO permite apagar em definitivo nem enviar e-mail.
+3. **Primeira execução**: `npm run job:email-cleanup -w apps/server` — só
+   salva o cursor (não mexe na caixa acumulada). Da segunda em diante,
+   classifica o que chegou de novo.
+4. Corrigir a limpeza é conversa: "não jogue fora e-mails da escola" vira
+   memória e a IA respeita. Recuperar e-mail: lixeira do Gmail (30 dias).
+
 ## Notas
 
 - O web app da v1 sai do ar junto com a v1; ele volta servido pela v2
