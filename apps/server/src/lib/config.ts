@@ -17,6 +17,7 @@ const schema = z.object({
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   GOOGLE_REFRESH_TOKEN: z.string().optional(),
   BANCO_MCP_TOKEN: z.string().default(''),
+  VAULT_PATH: z.string().default('./data/vault'),
 });
 
 export type Config = z.infer<typeof schema>;
