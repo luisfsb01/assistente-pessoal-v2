@@ -16,16 +16,21 @@
   "dependencies": {
     "@ai-sdk/openai": "^2.0.0",
     "@hono/node-server": "^2.0.8",
+    "@mozilla/readability": "^0.6.0",
     "@supabase/supabase-js": "^2.45.0",
     "ai": "^5.0.0",
     "googleapis": "^173.0.0",
     "grammy": "^1.30.0",
     "hono": "^4.12.29",
+    "jsdom": "^29.1.1",
     "node-cron": "^3.0.3",
+    "turndown": "^7.2.4",
     "zod": "^3.25.0"
   },
   "devDependencies": {
+    "@types/jsdom": "^28.0.3",
     "@types/node": "^22.0.0",
+    "@types/turndown": "^5.0.6",
     "tsx": "^4.19.0"
   }
 }
