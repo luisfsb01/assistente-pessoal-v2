@@ -11,6 +11,7 @@ import { recallMemories } from '../memory/recall.js';
 import { buildTaskTools } from '../tools/tasks.js';
 import { buildShoppingTools } from '../tools/shopping.js';
 import { buildFinanceTools } from '../tools/finance.js';
+import { buildKnowledgeTools } from '../tools/knowledge.js';
 import { buildCalendarTools, calendarApiFromGoogle } from '../tools/calendar.js';
 import { generateAgentText } from './models.js';
 import { buildSystemPrompt, subjectsForChat } from './prompts.js';
@@ -50,6 +51,7 @@ export function buildTools(identity: ChatIdentity): ToolSet {
     ...buildTaskTools(identity),
     ...buildShoppingTools(identity),
     ...buildFinanceTools(),
+    ...buildKnowledgeTools(),
     ...(hasGoogleCreds(cfg)
       ? buildCalendarTools(identity, {
           getUserBySubject,
