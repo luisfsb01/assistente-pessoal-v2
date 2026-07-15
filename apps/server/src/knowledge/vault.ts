@@ -17,7 +17,7 @@ export type SourceNote = {
 export function slugify(title: string): string {
   const s = title
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
@@ -65,7 +65,8 @@ async function exists(p: string): Promise<boolean> {
 /** Grava a nota em Sources/YYYY-MM-DD-<slug>.md; colisão ganha -2, -3… Retorna o relPath. */
 export async function writeSourceNote(n: SourceNote, base = getConfig().VAULT_PATH): Promise<string> {
   await mkdir(join(base, 'Sources'), { recursive: true });
-  const date = n.capturedAt.slice(0, 10);
+  const dateRaw = n.capturedAt.slice(0, 10);
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(dateRaw) ? dateRaw : new Date().toISOString().slice(0, 10);
   const slug = slugify(n.title);
   let rel = `Sources/${date}-${slug}.md`;
   for (let i = 2; await exists(join(base, rel)); i++) rel = `Sources/${date}-${slug}-${i}.md`;

@@ -70,6 +70,11 @@ describe('writeSourceNote', () => {
     expect(p2).toBe('Sources/2026-07-15-atencao-e-tudo-que-voce-precisa-2.md');
     expect(await readFile(join(base, p1), 'utf8')).toContain('Corpo do artigo.');
   });
+  it('capturedAt malformado não vira caminho — cai para a data de hoje', async () => {
+    const p = await writeSourceNote(nota({ capturedAt: '../../etc/x' }), base);
+    expect(p).toMatch(/^Sources\/\d{4}-\d{2}-\d{2}-atencao/);
+    expect(p).not.toContain('..');
+  });
 });
 
 describe('writeWikiPage + sanitizePageName', () => {
