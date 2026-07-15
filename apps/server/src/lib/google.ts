@@ -1,4 +1,4 @@
-import { google, type calendar_v3 } from 'googleapis';
+import { google, type calendar_v3, type gmail_v1 } from 'googleapis';
 import type { Config } from './config.js';
 
 export function hasGoogleCreds(cfg: Config): boolean {
@@ -10,4 +10,11 @@ export function getCalendarClient(cfg: Config): calendar_v3.Calendar {
   const auth = new google.auth.OAuth2(cfg.GOOGLE_CLIENT_ID, cfg.GOOGLE_CLIENT_SECRET);
   auth.setCredentials({ refresh_token: cfg.GOOGLE_REFRESH_TOKEN });
   return google.calendar({ version: 'v3', auth });
+}
+
+export function getGmailClient(cfg: Config): gmail_v1.Gmail {
+  if (!hasGoogleCreds(cfg)) throw new Error('credenciais Google ausentes');
+  const auth = new google.auth.OAuth2(cfg.GOOGLE_CLIENT_ID, cfg.GOOGLE_CLIENT_SECRET);
+  auth.setCredentials({ refresh_token: cfg.GOOGLE_REFRESH_TOKEN });
+  return google.gmail({ version: 'v1', auth });
 }
