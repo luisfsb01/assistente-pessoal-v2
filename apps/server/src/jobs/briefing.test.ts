@@ -10,6 +10,7 @@ const baseCtx: BriefingContext = {
   queued: ['Gasto atípico: X — R$ 950,00 em 14/07'],
   commitmentsToday: [{ id: 'c1', description: 'Internet', amount: 120, day_of_month: 15, active: true }],
   finance: { month: '2026-07', income: 5000, expense: 2000, invested: 0, balance: 3000, pending_review: 3, by_category: [{ category: 'Casa', spent: 800, target: 1000 }] },
+  cleanup: { count: 2, lines: ['Loja X — OFERTA', 'Banco Y — extrato'] },
 };
 
 describe('buildBriefingPrompt', () => {
@@ -27,14 +28,37 @@ describe('buildBriefingPrompt', () => {
     const p = buildBriefingPrompt({ ...baseCtx, finance: null });
     expect(p).not.toContain('Situação do mês');
   });
+  it('inclui o relatório da limpeza do e-mail', () => {
+    const p = buildBriefingPrompt(baseCtx);
+    expect(p).toContain('2 e-mails para a lixeira');
+    expect(p).toContain('Loja X — OFERTA');
+  });
+  it('sem limpeza, não inclui o bloco', () => {
+    const p = buildBriefingPrompt({ ...baseCtx, cleanup: null });
+    expect(p).not.toContain('lixeira');
+  });
 });
 
 describe('isEmptyBriefing', () => {
   it('vazio quando não há nada a dizer', () => {
     expect(
-      isEmptyBriefing({ name: 'Esposa', date: '2026-07-15', agenda: [], tasks: [], queued: [], commitmentsToday: [], finance: null }),
+      isEmptyBriefing({ name: 'Esposa', date: '2026-07-15', agenda: [], tasks: [], queued: [], commitmentsToday: [], finance: null, cleanup: null }),
     ).toBe(true);
     expect(isEmptyBriefing(baseCtx)).toBe(false);
+  });
+  it('só a limpeza já é conteúdo (briefing sai)', () => {
+    expect(
+      isEmptyBriefing({
+        name: 'Luis',
+        date: '2026-07-15',
+        agenda: [],
+        tasks: [],
+        queued: [],
+        commitmentsToday: [],
+        finance: null,
+        cleanup: { count: 1, lines: ['x'] },
+      }),
+    ).toBe(false);
   });
 });
 
@@ -51,6 +75,7 @@ describe('runDailyBriefing', () => {
       listTasks: async () => [],
       listCommitments: async () => [],
       listQueuedForTarget: async () => [],
+      listTrashedSince: async () => [],
       markBriefed: async (ids: string[]) => void briefed.push(ids),
       monthSummary: async () => baseCtx.finance!,
       generate: async () => 'Bom dia! Resumo do dia…',
@@ -86,5 +111,21 @@ describe('runDailyBriefing', () => {
     });
     await runDailyBriefing(async (chatId) => void sent.push(chatId), d);
     expect(sent).toEqual([222]); // luis falhou, esposa recebeu
+  });
+
+  it('limpeza entra só para o Luis', async () => {
+    const prompts: string[] = [];
+    const d = deps({
+      listTrashedSince: async () => [
+        { summary: 'Lixeira: Loja X — OFERTA', reason: 'promoção' },
+      ],
+      generate: async (_s: string, prompt: string) => {
+        prompts.push(prompt);
+        return 'Bom dia!';
+      },
+    });
+    await runDailyBriefing(async () => undefined, d);
+    expect(prompts).toHaveLength(1); // esposa continua vazia (limpeza não conta para ela)
+    expect(prompts[0]).toContain('Loja X — OFERTA');
   });
 });

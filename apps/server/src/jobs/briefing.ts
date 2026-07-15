@@ -1,6 +1,6 @@
 import { generateAgentText } from '../agent/models.js';
 import { getGroupChatId, getSubjectChatId, getUserBySubject } from '../db/chats.js';
-import { listQueuedForTarget, markBriefed, type QueueEvent } from '../db/events.js';
+import { listEventsByKindSince, listQueuedForTarget, markBriefed, type QueueEvent } from '../db/events.js';
 import { listCommitments, type Commitment } from '../db/finance.js';
 import { listTasks, type Task } from '../db/tasks.js';
 import { getConfig } from '../lib/config.js';
@@ -23,6 +23,7 @@ export type BriefingContext = {
   queued: string[];
   commitmentsToday: Commitment[];
   finance: MonthSummary | null;
+  cleanup: { count: number; lines: string[] } | null;
 };
 
 function ddmm(date: string): string {
@@ -55,6 +56,10 @@ export function buildBriefingPrompt(ctx: BriefingContext): string {
       `Situação do mês (${f.month}): receitas ${formatBrl(f.income)}, despesas ${formatBrl(f.expense)}, investido ${formatBrl(f.invested)}, saldo ${formatBrl(f.balance)}, ${f.pending_review} gastos a classificar.${cats ? `\nPor categoria:\n${cats}` : ''}`,
     );
   }
+  if (ctx.cleanup && ctx.cleanup.count > 0) {
+    const extra = ctx.cleanup.count > ctx.cleanup.lines.length ? `\n(e mais ${ctx.cleanup.count - ctx.cleanup.lines.length})` : '';
+    parts.push(`Limpeza do e-mail (últimas 24h): ${ctx.cleanup.count} e-mails para a lixeira:\n${ctx.cleanup.lines.map((l) => `- ${l}`).join('\n')}${extra}`);
+  }
   return parts.join('\n\n');
 }
 
@@ -65,7 +70,8 @@ export function isEmptyBriefing(ctx: BriefingContext): boolean {
     ctx.tasks.length === 0 &&
     ctx.queued.length === 0 &&
     ctx.commitmentsToday.length === 0 &&
-    ctx.finance === null
+    ctx.finance === null &&
+    ctx.cleanup === null
   );
 }
 
@@ -81,6 +87,7 @@ export type BriefingDeps = {
   listTasks: typeof listTasks;
   listCommitments: typeof listCommitments;
   listQueuedForTarget: typeof listQueuedForTarget;
+  listTrashedSince: (sinceIso: string) => Promise<Array<{ summary: string; reason: string | null }>>;
   markBriefed: typeof markBriefed;
   monthSummary: (month: string) => Promise<MonthSummary>;
   generate: (system: string, prompt: string) => Promise<string>;
@@ -105,6 +112,7 @@ export function defaultBriefingDeps(): BriefingDeps {
     listTasks,
     listCommitments,
     listQueuedForTarget,
+    listTrashedSince: (sinceIso) => listEventsByKindSince('email_trashed', sinceIso),
     markBriefed,
     monthSummary: computeMonthSummary,
     generate: (system, prompt) =>
@@ -126,8 +134,15 @@ async function contextFor(subject: 'luis' | 'esposa', deps: BriefingDeps): Promi
     subject === 'luis' ? (await deps.listCommitments()).filter((c) => c.day_of_month === dayOfMonth) : [];
   const finance = subject === 'luis' ? await deps.monthSummary(today.slice(0, 7)) : null;
 
+  const sinceIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const trashedRaw = subject === 'luis' ? await deps.listTrashedSince(sinceIso).catch(() => []) : [];
+  const cleanup =
+    trashedRaw.length > 0
+      ? { count: trashedRaw.length, lines: trashedRaw.slice(0, 10).map((t) => t.summary.replace('Lixeira: ', '')) }
+      : null;
+
   return {
-    ctx: { name: user.name, date: today, agenda, tasks, queued: queuedEvents.map((q) => q.summary), commitmentsToday, finance },
+    ctx: { name: user.name, date: today, agenda, tasks, queued: queuedEvents.map((q) => q.summary), commitmentsToday, finance, cleanup },
     queuedIds: queuedEvents.map((q) => q.id),
   };
 }
@@ -181,6 +196,7 @@ export async function runCoupleBriefing(
       queued: queuedEvents.map((q) => q.summary),
       commitmentsToday: [],
       finance,
+      cleanup: null,
     };
     const prompt = `${buildBriefingPrompt(ctx)}\n\n(É a visão de SÁBADO do casal: foque no fim de semana e em como o mês está indo.)`;
     const text = await deps.generate(SYSTEM, prompt);
