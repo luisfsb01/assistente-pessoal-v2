@@ -8,6 +8,9 @@ import { getGmailClient } from '../lib/google.js';
 import { recallMemories } from '../memory/recall.js';
 
 const STATE_KEY = 'gmail_cleanup_state';
+// teto por rodada: numa rajada (>50 e-mails novos), processa só os mais antigos agora —
+// o resto fica acima do cursor e é pego sozinho na(s) rodada(s) seguinte(s)
+const MAX_POR_RODADA = 50;
 
 export type CleanupState = { lastInternalDate: number };
 
@@ -78,8 +81,10 @@ export async function runEmailCleanup(
     return { scanned: 0, trashed: 0, important: 0 };
   }
 
-  const emails = await deps.listNewInboxEmails(state.lastInternalDate);
-  if (emails.length === 0) return { scanned: 0, trashed: 0, important: 0 };
+  const allNew = await deps.listNewInboxEmails(state.lastInternalDate);
+  if (allNew.length === 0) return { scanned: 0, trashed: 0, important: 0 };
+  // allNew vem do mais antigo pro mais novo; numa rajada, processa só os MAX_POR_RODADA mais antigos
+  const emails = allNew.slice(0, MAX_POR_RODADA);
 
   let memories: Array<{ content: string }> = [];
   try {

@@ -43,19 +43,26 @@ export function gmailApiFromGoogle(client: gmail_v1.Gmail): GmailApi {
     async listNewInboxEmails(afterEpochMs) {
       // after: do Gmail tem granularidade de segundos e é inclusivo — o filtro fino é pelo internalDate
       const q = `in:inbox after:${Math.floor(afterEpochMs / 1000)}`;
-      const res = await client.users.messages.list({ userId: 'me', q, maxResults: 50 });
       const out: InboxEmail[] = [];
-      for (const m of res.data.messages ?? []) {
-        if (!m.id) continue;
-        const full = await client.users.messages.get({
-          userId: 'me',
-          id: m.id,
-          format: 'metadata',
-          metadataHeaders: ['From', 'Subject'],
-        });
-        const email = mapMessage(full.data);
-        if (email.internalDate > afterEpochMs) out.push(email);
-      }
+      // pagina até esgotar o nextPageToken — uma rajada de e-mails pode passar de 50 (1 página)
+      let pageToken: string | undefined;
+      do {
+        const res = await client.users.messages.list({ userId: 'me', q, maxResults: 50, pageToken });
+        for (const m of res.data.messages ?? []) {
+          if (!m.id) continue;
+          const full = await client.users.messages.get({
+            userId: 'me',
+            id: m.id,
+            format: 'metadata',
+            metadataHeaders: ['From', 'Subject'],
+          });
+          const email = mapMessage(full.data);
+          if (email.internalDate > afterEpochMs) out.push(email);
+        }
+        pageToken = res.data.nextPageToken ?? undefined;
+      } while (pageToken);
+      // ordem determinística: mais antigo primeiro (quem chama decide o que processar primeiro numa rajada)
+      out.sort((a, b) => a.internalDate - b.internalDate);
       return out;
     },
     async trashMessage(id) {

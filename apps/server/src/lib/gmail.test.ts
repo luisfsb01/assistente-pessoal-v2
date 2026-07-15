@@ -53,6 +53,31 @@ describe('gmailApiFromGoogle', () => {
     expect(out.map((e) => e.id)).toEqual(['novo']);
   });
 
+  it('pagina até esgotar o nextPageToken e devolve tudo ordenado do mais antigo pro mais novo', async () => {
+    const seenPageTokens: (string | undefined)[] = [];
+    const client = {
+      users: {
+        messages: {
+          list: async (args: { pageToken?: string }) => {
+            seenPageTokens.push(args.pageToken);
+            if (args.pageToken === undefined) {
+              return { data: { messages: [{ id: 'a' }, { id: 'b' }], nextPageToken: 'p2' } };
+            }
+            return { data: { messages: [{ id: 'c' }] } };
+          },
+          get: async ({ id }: { id: string }) => {
+            const dates: Record<string, number> = { a: 3000, b: 5000, c: 1000 };
+            return { data: msg(id, dates[id]) };
+          },
+        },
+      },
+    } as never;
+    const api = gmailApiFromGoogle(client);
+    const out = await api.listNewInboxEmails(500);
+    expect(seenPageTokens).toEqual([undefined, 'p2']);
+    expect(out.map((e) => e.id)).toEqual(['c', 'a', 'b']); // ascendente por internalDate
+  });
+
   it('trashMessage chama a API com o id', async () => {
     const trashed: string[] = [];
     const client = {

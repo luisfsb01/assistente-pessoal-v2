@@ -130,6 +130,20 @@ describe('runEmailCleanup', () => {
     expect(state.get('gmail_cleanup_state')).toEqual({ lastInternalDate: 1_000 });
   });
 
+  it('rajada com mais de 50 novos: processa só os 50 mais antigos e o cursor avança até o 50º, não o mais novo', async () => {
+    const emails60 = Array.from({ length: 60 }, (_, i) => email(`m${i + 1}`, { internalDate: 1001 + i })); // 1001..1060, mais antigo primeiro
+    const { d, state } = deps({
+      listNewInboxEmails: async () => emails60,
+      generate: async () =>
+        ({
+          verdicts: Array.from({ length: 60 }, (_, i) => ({ id: `m${i + 1}`, verdict: 'normal', reason: '' })),
+        }) as never,
+    });
+    const out = await runEmailCleanup(d);
+    expect(out).toEqual({ scanned: 50, trashed: 0, important: 0 });
+    expect(state.get('gmail_cleanup_state')).toEqual({ lastInternalDate: 1050 }); // 50º mais antigo, não o 60º (1060)
+  });
+
   it('id que a IA não devolveu = normal; falha no trash de um não derruba o outro', async () => {
     const { d, inserted } = deps({
       listNewInboxEmails: async () => [

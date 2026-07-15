@@ -4,6 +4,7 @@ export type EventSource = 'finance' | 'calendar' | 'tasks' | 'gmail';
 export type EventDecision = 'notify' | 'briefing' | 'ignore';
 export type EventTarget = 'luis' | 'esposa' | 'grupo';
 export type EventStatus = 'pending' | 'ignored' | 'queued' | 'notified' | 'briefed';
+export type EventResolution = { decision: EventDecision; reason: string; target: EventTarget; status: EventStatus };
 
 export type QueueEvent = {
   id: string;
@@ -43,7 +44,7 @@ export async function insertEvent(e: {
   dedupeKey: string;
   summary: string;
   payload?: unknown;
-  resolution?: { decision: EventDecision; reason: string; target: EventTarget; status: EventStatus };
+  resolution?: EventResolution;
 }): Promise<QueueEvent | null> {
   const r = e.resolution;
   const { data, error } = await supabase
@@ -78,10 +79,7 @@ export async function listPendingEvents(): Promise<QueueEvent[]> {
 }
 
 /** Grava a decisão do julgamento (auditável) e o status resultante. */
-export async function resolveEvent(
-  id: string,
-  r: { decision: EventDecision; reason: string; target: EventTarget; status: EventStatus },
-): Promise<void> {
+export async function resolveEvent(id: string, r: EventResolution): Promise<void> {
   const { error } = await supabase
     .from('event_queue')
     .update({ decision: r.decision, reason: r.reason, target: r.target, status: r.status, decided_at: new Date().toISOString() })

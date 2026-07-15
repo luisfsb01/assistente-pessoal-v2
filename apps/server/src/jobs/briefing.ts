@@ -134,8 +134,10 @@ async function contextFor(subject: 'luis' | 'esposa', deps: BriefingDeps): Promi
     subject === 'luis' ? (await deps.listCommitments()).filter((c) => c.day_of_month === dayOfMonth) : [];
   const finance = subject === 'luis' ? await deps.monthSummary(today.slice(0, 7)) : null;
 
-  const sinceIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const trashedRaw = subject === 'luis' ? await deps.listTrashedSince(sinceIso).catch(() => []) : [];
+  const trashedRaw =
+    subject === 'luis'
+      ? await deps.listTrashedSince(new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()).catch(() => [])
+      : [];
   const cleanup =
     trashedRaw.length > 0
       ? { count: trashedRaw.length, lines: trashedRaw.slice(0, 10).map((t) => t.summary.replace('Lixeira: ', '')) }

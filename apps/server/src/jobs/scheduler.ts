@@ -31,10 +31,11 @@ export function startScheduler(bot: Bot): void {
   cron.schedule('30 6 * * *', cycle(['tasks'], 'tasks'), opts);
 
   // Limpeza do Gmail (Fase 5): 30 em 30 min; sem escopo gmail.modify o job só loga o erro
-  if (hasGoogleCreds(cfg))
+  if (hasGoogleCreds(cfg)) {
     cron.schedule('*/30 * * * *', () => {
       runEmailCleanup().catch((err) => console.error('[job:email-cleanup]', err));
     }, opts);
+  }
 
   // Briefing matinal (modelo forte) + visão do casal aos sábados
   cron.schedule('0 7 * * *', () => {
