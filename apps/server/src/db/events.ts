@@ -1,6 +1,6 @@
 import { supabase } from './client.js';
 
-export type EventSource = 'finance' | 'calendar' | 'tasks';
+export type EventSource = 'finance' | 'calendar' | 'tasks' | 'gmail';
 export type EventDecision = 'notify' | 'briefing' | 'ignore';
 export type EventTarget = 'luis' | 'esposa' | 'grupo';
 export type EventStatus = 'pending' | 'ignored' | 'queued' | 'notified' | 'briefed';
@@ -35,18 +35,30 @@ function toEvent(r: Record<string, unknown>): QueueEvent {
   };
 }
 
-/** Insere um evento; retorna null se o dedupe_key já existia (evento repetido). */
+/** Insere um evento; retorna null se o dedupe_key já existia (evento repetido).
+ *  Com `resolution`, o evento já nasce decidido (auditoria sem passar pelo julgamento). */
 export async function insertEvent(e: {
   source: EventSource;
   kind: string;
   dedupeKey: string;
   summary: string;
   payload?: unknown;
+  resolution?: { decision: EventDecision; reason: string; target: EventTarget; status: EventStatus };
 }): Promise<QueueEvent | null> {
+  const r = e.resolution;
   const { data, error } = await supabase
     .from('event_queue')
     .upsert(
-      { source: e.source, kind: e.kind, dedupe_key: e.dedupeKey, summary: e.summary, payload: e.payload ?? null },
+      {
+        source: e.source,
+        kind: e.kind,
+        dedupe_key: e.dedupeKey,
+        summary: e.summary,
+        payload: e.payload ?? null,
+        ...(r
+          ? { decision: r.decision, reason: r.reason, target: r.target, status: r.status, decided_at: new Date().toISOString() }
+          : {}),
+      },
       { onConflict: 'dedupe_key', ignoreDuplicates: true },
     )
     .select(COLS);
@@ -115,4 +127,19 @@ export async function countNotifiedSince(sinceIso: string, target: EventTarget):
     .gte('delivered_at', sinceIso);
   if (error) throw error;
   return count ?? 0;
+}
+
+/** Eventos de um kind desde um instante (relatório da limpeza no briefing). */
+export async function listEventsByKindSince(
+  kind: string,
+  sinceIso: string,
+): Promise<Array<{ summary: string; reason: string | null }>> {
+  const { data, error } = await supabase
+    .from('event_queue')
+    .select('summary, reason')
+    .eq('kind', kind)
+    .gte('created_at', sinceIso)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((r) => ({ summary: r.summary as string, reason: (r.reason as string | null) ?? null }));
 }
