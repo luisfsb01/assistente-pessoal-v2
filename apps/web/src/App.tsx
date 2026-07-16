@@ -5,6 +5,7 @@ import RedefinirSenha from './pages/RedefinirSenha'
 import Dashboard from './pages/Dashboard'
 import Tarefas from './pages/Tarefas'
 import Compras from './pages/Compras'
+import Habitos from './pages/Habitos'
 import Categorias from './pages/Categorias'
 import Configuracoes from './pages/Configuracoes'
 import Compromissos from './pages/Compromissos'
@@ -41,6 +42,7 @@ export default function App() {
         <Route index element={<Dashboard />} />
         <Route path="/tarefas" element={<Tarefas />} />
         <Route path="/compras" element={<Compras />} />
+        <Route path="/habitos" element={<Habitos />} />
         <Route path="/transacoes" element={<Transacoes />} />
         <Route path="/categorias" element={<Categorias />} />
         <Route path="/objetivos" element={<Objetivos />} />
