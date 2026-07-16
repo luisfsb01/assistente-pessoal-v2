@@ -15,10 +15,11 @@ import { calendarApiFromGoogle, zonedDayStartIso } from '../tools/calendar.js';
 import { collectFinanceEvents } from './collect-finance.js';
 import { collectCalendarEvents, defaultCalendarCollectorDeps } from './collect-calendar.js';
 import { collectTaskEvents } from './collect-tasks.js';
+import { collectProjectEvents } from './collect-projects.js';
 import { judgeEvents, type JudgedDecision } from './judge.js';
 import { getProactivityConfig, isQuietHours, localTimeHHMM, type ProactivityConfig } from './rules.js';
 
-export type CollectorSource = 'finance' | 'calendar' | 'tasks';
+export type CollectorSource = 'finance' | 'calendar' | 'tasks' | 'projects';
 
 export type EngineDeps = {
   collectors: Partial<Record<CollectorSource, () => Promise<number>>>;
@@ -39,6 +40,7 @@ export function defaultEngineDeps(): EngineDeps {
   const cfg = getConfig();
   const collectors: EngineDeps['collectors'] = {
     tasks: () => collectTaskEvents(),
+    projects: () => collectProjectEvents(),
   };
   if (isBankConfigured()) collectors.finance = () => collectFinanceEvents();
   if (hasGoogleCreds(cfg)) {
