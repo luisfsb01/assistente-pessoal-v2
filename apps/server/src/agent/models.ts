@@ -13,7 +13,7 @@ import { getConfig, type Config } from '../lib/config.js';
 import { estimateCostBrl } from '../lib/pricing.js';
 import { getMonthCostBrl, recordUsage, type UsageRow } from '../db/usage.js';
 
-export type Purpose = 'chat' | 'reflection' | 'briefing' | 'analysis' | 'embedding' | 'categorize' | 'judgment';
+export type Purpose = 'chat' | 'reflection' | 'briefing' | 'analysis' | 'embedding' | 'categorize' | 'judgment' | 'librarian';
 
 const STRONG_PURPOSES: ReadonlySet<Purpose> = new Set(['briefing', 'analysis']);
 

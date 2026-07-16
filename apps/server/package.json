@@ -12,7 +12,8 @@
     "job:briefing": "tsx src/scripts/run-briefing.ts",
     "job:proactive": "tsx src/scripts/run-proactive.ts",
     "job:email-cleanup": "tsx src/scripts/run-email-cleanup.ts",
-    "job:reindex-vault": "tsx src/scripts/reindex-vault.ts"
+    "job:reindex-vault": "tsx src/scripts/reindex-vault.ts",
+    "job:librarian": "tsx src/scripts/run-librarian.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^2.0.0",
