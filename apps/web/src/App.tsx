@@ -3,6 +3,7 @@ import Layout from './components/Layout'
 import Login from './pages/Login'
 import RedefinirSenha from './pages/RedefinirSenha'
 import Dashboard from './pages/Dashboard'
+import Tarefas from './pages/Tarefas'
 import Categorias from './pages/Categorias'
 import Configuracoes from './pages/Configuracoes'
 import Compromissos from './pages/Compromissos'
@@ -37,6 +38,7 @@ export default function App() {
         element={session ? <Layout /> : <Navigate to="/login" replace />}
       >
         <Route index element={<Dashboard />} />
+        <Route path="/tarefas" element={<Tarefas />} />
         <Route path="/transacoes" element={<Transacoes />} />
         <Route path="/categorias" element={<Categorias />} />
         <Route path="/objetivos" element={<Objetivos />} />
