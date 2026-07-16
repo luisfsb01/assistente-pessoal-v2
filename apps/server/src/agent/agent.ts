@@ -12,6 +12,7 @@ import { buildTaskTools } from '../tools/tasks.js';
 import { buildShoppingTools } from '../tools/shopping.js';
 import { buildFinanceTools } from '../tools/finance.js';
 import { buildKnowledgeTools } from '../tools/knowledge.js';
+import { buildHabitTools } from '../tools/habits.js';
 import { buildCalendarTools, calendarApiFromGoogle } from '../tools/calendar.js';
 import { generateAgentText } from './models.js';
 import { buildSystemPrompt, subjectsForChat } from './prompts.js';
@@ -52,6 +53,7 @@ export function buildTools(identity: ChatIdentity): ToolSet {
     ...buildShoppingTools(identity),
     ...buildFinanceTools(),
     ...buildKnowledgeTools(),
+    ...buildHabitTools(identity),
     ...(hasGoogleCreds(cfg)
       ? buildCalendarTools(identity, {
           getUserBySubject,
