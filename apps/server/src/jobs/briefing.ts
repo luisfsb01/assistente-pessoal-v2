@@ -2,11 +2,20 @@ import { generateAgentText } from '../agent/models.js';
 import { getGroupChatId, getSubjectChatId, getUserBySubject } from '../db/chats.js';
 import { listEventsByKindSince, listQueuedForTarget, markBriefed, type QueueEvent } from '../db/events.js';
 import { listCommitments, type Commitment } from '../db/finance.js';
+import { listActiveHabits, listCheckinsBetween } from '../db/habits.js';
 import { listTasks, type Task } from '../db/tasks.js';
 import { getConfig } from '../lib/config.js';
 import { addDays, todayInTz } from '../lib/dates.js';
 import { formatBrl } from '../lib/format.js';
 import { getCalendarClient, hasGoogleCreds } from '../lib/google.js';
+import {
+  monthProgress,
+  prevMonthRange,
+  prevWeekRange,
+  weekProgress,
+  weekStart,
+  type HabitProgress,
+} from '../services/habit-stats.js';
 import { computeMonthSummary, type MonthSummary } from '../services/month-summary.js';
 import {
   calendarApiFromGoogle,
@@ -24,6 +33,7 @@ export type BriefingContext = {
   commitmentsToday: Commitment[];
   finance: MonthSummary | null;
   cleanup: { count: number; lines: string[] } | null;
+  habits: { week: HabitProgress[]; lastWeek: HabitProgress[] | null; lastMonth: HabitProgress[] | null } | null;
 };
 
 function ddmm(date: string): string {
@@ -60,6 +70,16 @@ export function buildBriefingPrompt(ctx: BriefingContext): string {
     const extra = ctx.cleanup.count > ctx.cleanup.lines.length ? `\n(e mais ${ctx.cleanup.count - ctx.cleanup.lines.length})` : '';
     parts.push(`Limpeza do e-mail (últimas 24h): ${ctx.cleanup.count} e-mails para a lixeira:\n${ctx.cleanup.lines.map((l) => `- ${l}`).join('\n')}${extra}`);
   }
+  if (ctx.habits && ctx.habits.week.length > 0)
+    parts.push(`Hábitos da semana:\n${ctx.habits.week.map((h) => `- ${h.name}: ${h.done}/${h.target}`).join('\n')}`);
+  if (ctx.habits?.lastWeek)
+    parts.push(
+      `Semana passada (hábitos):\n${ctx.habits.lastWeek.map((h) => `- ${h.name}: ${h.done}/${h.target}`).join('\n')}\nComente a semana passada: parabenize meta batida, motive sem cobrar quem ficou abaixo.`,
+    );
+  if (ctx.habits?.lastMonth)
+    parts.push(
+      `Mês passado (hábitos):\n${ctx.habits.lastMonth.map((h) => `- ${h.name}: ${h.done}/${h.target}`).join('\n')}\nComente o mês passado: parabenize meta batida, motive sem cobrar quem ficou abaixo.`,
+    );
   return parts.join('\n\n');
 }
 
@@ -71,7 +91,8 @@ export function isEmptyBriefing(ctx: BriefingContext): boolean {
     ctx.queued.length === 0 &&
     ctx.commitmentsToday.length === 0 &&
     ctx.finance === null &&
-    ctx.cleanup === null
+    ctx.cleanup === null &&
+    ctx.habits === null
   );
 }
 
@@ -88,6 +109,8 @@ export type BriefingDeps = {
   listCommitments: typeof listCommitments;
   listQueuedForTarget: typeof listQueuedForTarget;
   listTrashedSince: (sinceIso: string) => Promise<Array<{ summary: string; reason: string | null }>>;
+  listActiveHabits: typeof listActiveHabits;
+  listHabitCheckins: typeof listCheckinsBetween;
   markBriefed: typeof markBriefed;
   monthSummary: (month: string) => Promise<MonthSummary>;
   generate: (system: string, prompt: string) => Promise<string>;
@@ -113,6 +136,8 @@ export function defaultBriefingDeps(): BriefingDeps {
     listCommitments,
     listQueuedForTarget,
     listTrashedSince: (sinceIso) => listEventsByKindSince('email_trashed', sinceIso),
+    listActiveHabits,
+    listHabitCheckins: listCheckinsBetween,
     markBriefed,
     monthSummary: computeMonthSummary,
     generate: (system, prompt) =>
@@ -143,8 +168,35 @@ async function contextFor(subject: 'luis' | 'esposa', deps: BriefingDeps): Promi
       ? { count: trashedRaw.length, lines: trashedRaw.slice(0, 10).map((t) => t.summary.replace('Lixeira: ', '')) }
       : null;
 
+  let habitsCtx: BriefingContext['habits'] = null;
+  const activeHabits = await deps.listActiveHabits(user.id).catch(() => []);
+  if (activeHabits.length > 0) {
+    const isMonday = weekStart(today) === today;
+    const isFirstOfMonth = today.endsWith('-01');
+    const wFrom = weekStart(today);
+    const pw = isMonday ? prevWeekRange(today) : null;
+    const pm = isFirstOfMonth ? prevMonthRange(today) : null;
+    const oldest = [wFrom, pw?.from, pm?.from].filter((x): x is string => Boolean(x)).sort()[0];
+    const checkins = await deps.listHabitCheckins(activeHabits.map((h) => h.id), oldest, today).catch(() => []);
+    habitsCtx = {
+      week: weekProgress(activeHabits, checkins, wFrom, today),
+      lastWeek: pw ? weekProgress(activeHabits, checkins, pw.from, pw.to) : null,
+      lastMonth: pm ? monthProgress(activeHabits, checkins, pm.from, pm.to) : null,
+    };
+  }
+
   return {
-    ctx: { name: user.name, date: today, agenda, tasks, queued: queuedEvents.map((q) => q.summary), commitmentsToday, finance, cleanup },
+    ctx: {
+      name: user.name,
+      date: today,
+      agenda,
+      tasks,
+      queued: queuedEvents.map((q) => q.summary),
+      commitmentsToday,
+      finance,
+      cleanup,
+      habits: habitsCtx,
+    },
     queuedIds: queuedEvents.map((q) => q.id),
   };
 }
@@ -199,6 +251,7 @@ export async function runCoupleBriefing(
       commitmentsToday: [],
       finance,
       cleanup: null,
+      habits: null,
     };
     const prompt = `${buildBriefingPrompt(ctx)}\n\n(É a visão de SÁBADO do casal: foque no fim de semana e em como o mês está indo.)`;
     const text = await deps.generate(SYSTEM, prompt);

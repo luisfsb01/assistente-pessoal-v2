@@ -11,6 +11,7 @@ const baseCtx: BriefingContext = {
   commitmentsToday: [{ id: 'c1', description: 'Internet', amount: 120, day_of_month: 15, active: true }],
   finance: { month: '2026-07', income: 5000, expense: 2000, invested: 0, balance: 3000, pending_review: 3, by_category: [{ category: 'Casa', spent: 800, target: 1000 }] },
   cleanup: { count: 2, lines: ['Loja X — OFERTA', 'Banco Y — extrato'] },
+  habits: { week: [{ name: 'Academia', done: 1, target: 3 }], lastWeek: null, lastMonth: null },
 };
 
 describe('buildBriefingPrompt', () => {
@@ -37,12 +38,35 @@ describe('buildBriefingPrompt', () => {
     const p = buildBriefingPrompt({ ...baseCtx, cleanup: null });
     expect(p).not.toContain('lixeira');
   });
+  it('inclui o progresso da semana dos hábitos', () => {
+    const p = buildBriefingPrompt(baseCtx);
+    expect(p).toContain('Academia: 1/3');
+  });
+  it('retrô só quando presente no contexto', () => {
+    const p = buildBriefingPrompt({
+      ...baseCtx,
+      habits: { week: [], lastWeek: [{ name: 'Academia', done: 3, target: 3 }], lastMonth: null },
+    });
+    expect(p).toContain('Semana passada');
+    expect(p).toContain('parabenize');
+    expect(buildBriefingPrompt(baseCtx)).not.toContain('Semana passada');
+  });
 });
 
 describe('isEmptyBriefing', () => {
   it('vazio quando não há nada a dizer', () => {
     expect(
-      isEmptyBriefing({ name: 'Esposa', date: '2026-07-15', agenda: [], tasks: [], queued: [], commitmentsToday: [], finance: null, cleanup: null }),
+      isEmptyBriefing({
+        name: 'Esposa',
+        date: '2026-07-15',
+        agenda: [],
+        tasks: [],
+        queued: [],
+        commitmentsToday: [],
+        finance: null,
+        cleanup: null,
+        habits: null,
+      }),
     ).toBe(true);
     expect(isEmptyBriefing(baseCtx)).toBe(false);
   });
@@ -57,6 +81,22 @@ describe('isEmptyBriefing', () => {
         commitmentsToday: [],
         finance: null,
         cleanup: { count: 1, lines: ['x'] },
+        habits: null,
+      }),
+    ).toBe(false);
+  });
+  it('hábitos com progresso já são conteúdo', () => {
+    expect(
+      isEmptyBriefing({
+        name: 'Esposa',
+        date: '2026-07-15',
+        agenda: [],
+        tasks: [],
+        queued: [],
+        commitmentsToday: [],
+        finance: null,
+        cleanup: null,
+        habits: { week: [{ name: 'Leitura', done: 2, target: 5 }], lastWeek: null, lastMonth: null },
       }),
     ).toBe(false);
   });
@@ -76,6 +116,8 @@ describe('runDailyBriefing', () => {
       listCommitments: async () => [],
       listQueuedForTarget: async () => [],
       listTrashedSince: async () => [],
+      listActiveHabits: async () => [],
+      listHabitCheckins: async () => [],
       markBriefed: async (ids: string[]) => void briefed.push(ids),
       monthSummary: async () => baseCtx.finance!,
       generate: async () => 'Bom dia! Resumo do dia…',
@@ -127,5 +169,23 @@ describe('runDailyBriefing', () => {
     await runDailyBriefing(async () => undefined, d);
     expect(prompts).toHaveLength(1); // esposa continua vazia (limpeza não conta para ela)
     expect(prompts[0]).toContain('Loja X — OFERTA');
+  });
+
+  it('segunda-feira inclui retrô da semana anterior', async () => {
+    const prompts: string[] = [];
+    const d = deps({
+      todayIso: () => '2026-07-13', // segunda
+      listActiveHabits: async () => [{ id: 'h1', name: 'Academia', targetPerWeek: 3 }] as never,
+      listHabitCheckins: async () => [
+        { habitId: 'h1', date: '2026-07-08', done: true },
+        { habitId: 'h1', date: '2026-07-10', done: true },
+      ],
+      generate: async (_s: string, prompt: string) => {
+        prompts.push(prompt);
+        return 'Bom dia!';
+      },
+    });
+    await runDailyBriefing(async () => undefined, d);
+    expect(prompts.some((p) => p.includes('Semana passada') && p.includes('Academia: 2/3'))).toBe(true);
   });
 });
