@@ -58,6 +58,11 @@ describe('indexFile', () => {
     expect(await indexFile('Sources/a.md', d)).toBe('unchanged');
     expect(embedded).toBe(0);
   });
+  it('arquivo sem chunks (vazio) não mexe no banco', async () => {
+    const { d, replaced } = deps({ readNoteRaw: async () => '  \n\n ' });
+    expect(await indexFile('Sources/vazio.md', d)).toBe('unchanged');
+    expect(replaced).toHaveLength(0);
+  });
 });
 
 describe('reindexVault', () => {

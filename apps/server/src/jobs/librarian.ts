@@ -8,6 +8,8 @@ import { noteNameFromPath } from '../tools/knowledge.js';
 const STATE_KEY = 'librarian_state';
 const MAX_POR_NOITE = 5; // proteção de custo: fontes restantes ficam para a próxima noite
 const MAX_CHARS_FONTE = 8000;
+const MAX_CHARS_PAGINA = 1200; // corpo de página existente incluído no prompt (truncado)
+const MAX_PAGINAS_NO_PROMPT = 20; // acima disso, as demais entram só pelo nome
 
 type LibrarianState = { processed: string[] };
 
@@ -48,6 +50,7 @@ Regras:
 - Páginas em PT-BR, nomes curtos de conceito (ex.: "Prompt Engineering"); trechos citados podem ficar no idioma original.
 - Use [[links]] entre páginas e cite a fonte como [[nome-da-fonte]] onde usar o conteúdo dela.
 - Devolva o conteúdo COMPLETO de cada página alterada (não um diff) e o Index.md COMPLETO atualizado (índice navegável por tema, com [[links]]).
+- Ao ATUALIZAR uma página existente, parta do conteúdo atual dela mostrado no prompt: preserve o que continua válido e INTEGRE o novo — nunca reescreva do zero perdendo o acumulado.
 - Poucas páginas e boas: no máximo 4 por fonte.`;
 
 /** Ciclo noturno do bibliotecário: processa fontes novas e mantém o Wiki + Index. */
@@ -62,8 +65,19 @@ export async function runLibrarian(deps: LibrarianDeps = defaultDeps): Promise<{
     try {
       const fonte = (await deps.readNoteRaw(sourcePath)).slice(0, MAX_CHARS_FONTE);
       const wikiPaths = await deps.listWikiPaths();
-      const pageNames = wikiPaths.map(noteNameFromPath).filter((n) => n !== 'Index');
       const indexAtual = wikiPaths.includes('Wiki/Index.md') ? await deps.readNoteRaw('Wiki/Index.md') : '';
+
+      const paginasNoPrompt = wikiPaths.filter((p) => p !== 'Wiki/Index.md').slice(0, MAX_PAGINAS_NO_PROMPT);
+      const corpos: string[] = [];
+      for (const p of paginasNoPrompt) {
+        const corpo = (await deps.readNoteRaw(p)).slice(0, MAX_CHARS_PAGINA);
+        corpos.push(`### [[${noteNameFromPath(p)}]]\n${corpo}`);
+      }
+      const demais = wikiPaths.filter((p) => p !== 'Wiki/Index.md').slice(MAX_PAGINAS_NO_PROMPT).map(noteNameFromPath);
+      const paginasBlock =
+        corpos.length > 0
+          ? `Páginas existentes no Wiki (conteúdo ATUAL — preserve o que continua válido ao atualizar):\n${corpos.join('\n\n')}${demais.length > 0 ? `\n\n(Outras páginas, só pelo nome: ${demais.join(', ')})` : ''}`
+          : 'Páginas existentes no Wiki: (nenhuma ainda)';
 
       const prompt = `Fonte nova: [[${noteNameFromPath(sourcePath)}]]
 Conteúdo da fonte:
@@ -71,7 +85,7 @@ Conteúdo da fonte:
 ${fonte}
 """
 
-Páginas existentes no Wiki: ${pageNames.length > 0 ? pageNames.join(', ') : '(nenhuma ainda)'}
+${paginasBlock}
 
 Index.md atual:
 """

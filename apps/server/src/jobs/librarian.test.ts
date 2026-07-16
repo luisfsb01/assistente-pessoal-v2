@@ -84,7 +84,11 @@ describe('runLibrarian', () => {
     let seen = '';
     const { d } = deps({
       listWikiPaths: async () => ['Wiki/Index.md', 'Wiki/Hábitos.md'],
-      readNoteRaw: async (p) => (p === 'Wiki/Index.md' ? '# Índice atual' : 'texto da fonte X'),
+      readNoteRaw: async (p) => {
+        if (p === 'Wiki/Index.md') return '# Índice atual';
+        if (p === 'Wiki/Hábitos.md') return 'corpo atual de hábitos';
+        return 'texto da fonte X';
+      },
       generate: async (opts: { prompt: string }) => {
         seen = opts.prompt;
         return { pages: [], index: '# I' } as never;
@@ -93,6 +97,25 @@ describe('runLibrarian', () => {
     await runLibrarian(d);
     expect(seen).toContain('texto da fonte X');
     expect(seen).toContain('Hábitos');
+    expect(seen).toContain('corpo atual de hábitos');
     expect(seen).toContain('# Índice atual');
+  });
+
+  it('páginas além do teto entram só pelo nome', async () => {
+    let seen = '';
+    const extras = Array.from({ length: 22 }, (_, i) => `Wiki/P${String(i + 1).padStart(2, '0')}.md`);
+    const { d } = deps({
+      listWikiPaths: async () => ['Wiki/Index.md', ...extras],
+      readNoteRaw: async (p) => (p === 'Wiki/Index.md' ? '# Índice atual' : p.startsWith('Wiki/') ? 'corpo' : 'texto da fonte X'),
+      generate: async (opts: { prompt: string }) => {
+        seen = opts.prompt;
+        return { pages: [], index: '# I' } as never;
+      },
+    });
+    await runLibrarian(d);
+    expect(seen).toContain('corpo');
+    expect(seen).toContain('P21');
+    expect(seen).toContain('P22');
+    expect(seen).toContain('Outras páginas, só pelo nome: P21, P22');
   });
 });

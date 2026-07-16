@@ -52,8 +52,10 @@ export async function indexFile(relPath: string, deps: IndexerDeps = defaultDeps
   const raw = await deps.readNoteRaw(relPath);
   const hash = hashText(raw);
   if ((await deps.getIndexedFileHash(relPath)) === hash) return 'unchanged';
+  const parts = chunkMarkdown(raw);
+  if (parts.length === 0) return 'unchanged'; // nada a indexar (arquivo vazio)
   const chunks: Array<{ content: string; embedding: number[] }> = [];
-  for (const content of chunkMarkdown(raw)) chunks.push({ content, embedding: await deps.embed(content) });
+  for (const content of parts) chunks.push({ content, embedding: await deps.embed(content) });
   await deps.replaceFileChunks(relPath, hash, chunks);
   return 'indexed';
 }
