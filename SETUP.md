@@ -204,6 +204,22 @@ validada no VPS.
 9. **Recuperação do índice** (se precisar): `npm run job:reindex-vault -w apps/server`
    reconstrói a busca a partir dos arquivos.
 
+## 9. Fase 7 (hábitos + projetos)
+
+1. **Migração**: executar `supabase/migrations/0006_fase7.sql` (SQL Editor ou
+   Management API).
+2. **Hábitos**: crie por conversa ("quero acompanhar academia 3x por semana").
+   Todo dia às 21:00 o bot pergunta um por um, com botões ✅/❌ — responder
+   por texto também vale ("fui na academia"). O briefing mostra o progresso
+   da semana; segunda-feira traz a retrô da semana anterior e o dia 1º a do
+   mês.
+3. **Projetos**: "cria o projeto Site", "no projeto Site decidi usar Astro",
+   "tarefa 'wireframe' no Site para sexta", "como está o Site?". Tarefa
+   vencida aparece no check-in das 21:00 (✅ concluí / ❌ segue); projeto
+   sem novidades há 10 dias aparece no briefing.
+4. **Teste manual**: `npm run job:checkin -w apps/server` (envia as
+   perguntas pendentes agora).
+
 ## Notas
 
 - O web app da v1 sai do ar junto com a v1; ele volta servido pela v2
