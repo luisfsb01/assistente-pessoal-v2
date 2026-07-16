@@ -6,6 +6,8 @@ import Dashboard from './pages/Dashboard'
 import Tarefas from './pages/Tarefas'
 import Compras from './pages/Compras'
 import Habitos from './pages/Habitos'
+import Projetos from './pages/Projetos'
+import ProjetoDetalhe from './pages/ProjetoDetalhe'
 import Categorias from './pages/Categorias'
 import Configuracoes from './pages/Configuracoes'
 import Compromissos from './pages/Compromissos'
@@ -43,6 +45,8 @@ export default function App() {
         <Route path="/tarefas" element={<Tarefas />} />
         <Route path="/compras" element={<Compras />} />
         <Route path="/habitos" element={<Habitos />} />
+        <Route path="/projetos" element={<Projetos />} />
+        <Route path="/projetos/:id" element={<ProjetoDetalhe />} />
         <Route path="/transacoes" element={<Transacoes />} />
         <Route path="/categorias" element={<Categorias />} />
         <Route path="/objetivos" element={<Objetivos />} />

@@ -8,6 +8,7 @@ const navLinks = [
   { to: '/tarefas',       label: 'Tarefas',        icon: '✅', end: false },
   { to: '/compras',       label: 'Compras',        icon: '🛒', end: false },
   { to: '/habitos',       label: 'Hábitos',        icon: '🔁', end: false },
+  { to: '/projetos',      label: 'Projetos',       icon: '📁', end: false },
   { to: '/transacoes',    label: 'Transações',     icon: '💸', end: false },
   { to: '/categorias',    label: 'Categorias',     icon: '🏷', end: false },
   { to: '/objetivos',     label: 'Objetivos',      icon: '🎯', end: false },
