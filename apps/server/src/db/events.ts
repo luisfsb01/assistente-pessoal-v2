@@ -1,6 +1,6 @@
 import { supabase } from './client.js';
 
-export type EventSource = 'finance' | 'calendar' | 'tasks' | 'gmail';
+export type EventSource = 'finance' | 'calendar' | 'tasks' | 'gmail' | 'projects';
 export type EventDecision = 'notify' | 'briefing' | 'ignore';
 export type EventTarget = 'luis' | 'esposa' | 'grupo';
 export type EventStatus = 'pending' | 'ignored' | 'queued' | 'notified' | 'briefed';
