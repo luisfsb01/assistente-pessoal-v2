@@ -32,7 +32,7 @@ export type ReflectionOp = z.infer<typeof reflectionOutputSchema>['ops'][number]
 
 export type ReflectionRepo = {
   insert: (op: Extract<ReflectionOp, { action: 'add' }>) => Promise<void>;
-  update: (id: string, content: string) => Promise<void>;
+  update: (id: string, content: string) => Promise<boolean>;
   expire: (id: string) => Promise<void>;
 };
 

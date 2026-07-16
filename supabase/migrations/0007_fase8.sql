@@ -47,3 +47,13 @@ create policy web_config_insert on app_state for insert to authenticated
 create policy web_config_update on app_state for update to authenticated
   using (key in ('proactivity_config', 'routines_config'))
   with check (key in ('proactivity_config', 'routines_config'));
+
+-- Custo do mês por finalidade (espelha o fuso de sum_month_cost_brl)
+create or replace function month_cost_by_purpose()
+returns table (purpose text, cost_brl numeric) language sql stable as $$
+  select purpose, sum(cost_brl) as cost_brl
+  from llm_usage
+  where created_at >= date_trunc('month', now() at time zone 'America/Sao_Paulo') at time zone 'America/Sao_Paulo'
+  group by purpose
+  order by sum(cost_brl) desc;
+$$;

@@ -24,3 +24,12 @@ export async function getMonthCostBrl(): Promise<number> {
   if (error) throw error;
   return Number(data ?? 0);
 }
+
+export async function getMonthCostByPurpose(): Promise<Array<{ purpose: string; costBrl: number }>> {
+  const { data, error } = await supabase.rpc('month_cost_by_purpose');
+  if (error) throw error;
+  return (data ?? []).map((r: { purpose: string; cost_brl: number }) => ({
+    purpose: r.purpose,
+    costBrl: Number(r.cost_brl),
+  }));
+}

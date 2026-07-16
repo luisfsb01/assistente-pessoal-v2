@@ -46,16 +46,19 @@ export async function searchMemories(
   }));
 }
 
+/** Atualiza conteúdo+embedding; retorna false se o id não existe. */
 export async function updateMemoryContent(
   id: string,
   content: string,
   embedding: number[],
-): Promise<void> {
-  const { error } = await supabase
+): Promise<boolean> {
+  const { data, error } = await supabase
     .from('memories')
     .update({ content, embedding, updated_at: new Date().toISOString() })
-    .eq('id', id);
+    .eq('id', id)
+    .select('id');
   if (error) throw error;
+  return (data ?? []).length > 0;
 }
 
 export async function expireMemory(id: string): Promise<void> {
