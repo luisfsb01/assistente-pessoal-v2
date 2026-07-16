@@ -3,12 +3,15 @@ import type { Bot } from 'grammy';
 import { getConfig } from '../lib/config.js';
 import { hasGoogleCreds } from '../lib/google.js';
 import { isBankConfigured } from '../lib/banco-mcp.js';
+import { localTimeHHMM } from '../proactive/rules.js';
+import { weekdayInTz } from '../lib/dates.js';
 import { runReflection } from '../memory/reflection.js';
 import { runFinanceReview } from './finance-review.js';
 import { runDailyBriefing, runCoupleBriefing } from './briefing.js';
 import { runProactiveCycle, type CollectorSource } from '../proactive/engine.js';
 import { runEmailCleanup } from './email-cleanup.js';
 import { runLibrarian } from './librarian.js';
+import { dueRoutines, getRoutinesConfig, type RoutineKey } from './routines.js';
 import { runDailyCheckin } from './daily-checkin.js';
 
 export function startScheduler(bot: Bot): void {
@@ -21,10 +24,6 @@ export function startScheduler(bot: Bot): void {
 
   cron.schedule('0 3 * * *', () => {
     runReflection().catch((err) => console.error('[job:reflection]', err));
-  }, opts);
-
-  cron.schedule('0 8 * * *', () => {
-    runFinanceReview(bot).catch((err) => console.error('[job:finance-review]', err));
   }, opts);
 
   // Proatividade (spec §4): calendário 30min, banco 2h, tarefas 1x/dia antes do briefing
@@ -44,22 +43,28 @@ export function startScheduler(bot: Bot): void {
     runLibrarian().catch((err) => console.error('[job:librarian]', err));
   }, opts);
 
-  // Check-in de hábitos + tarefas vencidas (Fase 7): rotina direta, sem juiz
-  cron.schedule('0 21 * * *', () => {
-    runDailyCheckin((chatId, text, kb) =>
-      bot.api.sendMessage(chatId, text, kb ? { reply_markup: kb } : undefined).then(() => undefined),
-    ).catch((err) => console.error('[job:checkin]', err));
-  }, opts);
-
-  // Briefing matinal (modelo forte) + visão do casal aos sábados
-  cron.schedule('0 7 * * *', () => {
-    runDailyBriefing(send).catch((err) => console.error('[job:briefing]', err));
-  }, opts);
-  cron.schedule('0 8 * * 6', () => {
-    runCoupleBriefing(send).catch((err) => console.error('[job:briefing-casal]', err));
+  // Rotinas visíveis (Fase 8): horário e on/off vêm do app_state.routines_config
+  // (editável no web; mudança vale no minuto seguinte, sem restart).
+  const routineJobs: Record<RoutineKey, () => Promise<void>> = {
+    briefing: () => runDailyBriefing(send),
+    coupleBriefing: () => runCoupleBriefing(send),
+    financeReview: () => runFinanceReview(bot),
+    checkin: () =>
+      runDailyCheckin((chatId, text, kb) =>
+        bot.api.sendMessage(chatId, text, kb ? { reply_markup: kb } : undefined).then(() => undefined),
+      ),
+  };
+  cron.schedule('* * * * *', () => {
+    const now = new Date();
+    getRoutinesConfig()
+      .then((rc) => {
+        const due = dueRoutines(localTimeHHMM(now, cfg.TIMEZONE), weekdayInTz(cfg.TIMEZONE, now), rc);
+        for (const key of due) routineJobs[key]().catch((err) => console.error(`[job:${key}]`, err));
+      })
+      .catch((err) => console.error('[scheduler:tick]', err));
   }, opts);
 
   console.log(
-    `[scheduler] reflexão 03:00, bibliotecário 04:00, revisão financeira 08:00, briefing 07:00 (+casal sáb 08:00), check-in 21:00, coletores: calendário ${hasGoogleCreds(cfg) ? '30min' : 'off'}, banco ${isBankConfigured() ? '2h' : 'off'}, tarefas+projetos 06:30, gmail ${hasGoogleCreds(cfg) ? '30min' : 'off'} — ${cfg.TIMEZONE}`,
+    `[scheduler] reflexão 03:00, bibliotecário 04:00, rotinas via routines_config (defaults 07:00, sáb 08:00, 08:00, 21:00), coletores: calendário ${hasGoogleCreds(cfg) ? '30min' : 'off'}, banco ${isBankConfigured() ? '2h' : 'off'}, tarefas+projetos 06:30, gmail ${hasGoogleCreds(cfg) ? '30min' : 'off'} — ${cfg.TIMEZONE}`,
   );
 }
