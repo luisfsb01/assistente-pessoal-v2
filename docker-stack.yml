@@ -20,6 +20,9 @@ services:
       - GOOGLE_REFRESH_TOKEN=${GOOGLE_REFRESH_TOKEN:-}
       - BANCO_MCP_TOKEN=${BANCO_MCP_TOKEN:-}
       - PORT=8080
+      - VAULT_PATH=/vault
+    volumes:
+      - /root/assistente-vault:/vault
     networks:
       - projetonet
     deploy:

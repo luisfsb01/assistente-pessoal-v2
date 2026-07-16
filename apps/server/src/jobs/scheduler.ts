@@ -8,6 +8,7 @@ import { runFinanceReview } from './finance-review.js';
 import { runDailyBriefing, runCoupleBriefing } from './briefing.js';
 import { runProactiveCycle, type CollectorSource } from '../proactive/engine.js';
 import { runEmailCleanup } from './email-cleanup.js';
+import { runLibrarian } from './librarian.js';
 
 export function startScheduler(bot: Bot): void {
   const cfg = getConfig();
@@ -37,6 +38,11 @@ export function startScheduler(bot: Bot): void {
     }, opts);
   }
 
+  // Bibliotecário do segundo cérebro (Fase 6): processa fontes novas de madrugada
+  cron.schedule('0 4 * * *', () => {
+    runLibrarian().catch((err) => console.error('[job:librarian]', err));
+  }, opts);
+
   // Briefing matinal (modelo forte) + visão do casal aos sábados
   cron.schedule('0 7 * * *', () => {
     runDailyBriefing(send).catch((err) => console.error('[job:briefing]', err));
@@ -46,6 +52,6 @@ export function startScheduler(bot: Bot): void {
   }, opts);
 
   console.log(
-    `[scheduler] reflexão 03:00, revisão financeira 08:00, briefing 07:00 (+casal sáb 08:00), coletores: calendário ${hasGoogleCreds(cfg) ? '30min' : 'off'}, banco ${isBankConfigured() ? '2h' : 'off'}, tarefas 06:30, gmail ${hasGoogleCreds(cfg) ? '30min' : 'off'} — ${cfg.TIMEZONE}`,
+    `[scheduler] reflexão 03:00, bibliotecário 04:00, revisão financeira 08:00, briefing 07:00 (+casal sáb 08:00), coletores: calendário ${hasGoogleCreds(cfg) ? '30min' : 'off'}, banco ${isBankConfigured() ? '2h' : 'off'}, tarefas 06:30, gmail ${hasGoogleCreds(cfg) ? '30min' : 'off'} — ${cfg.TIMEZONE}`,
   );
 }

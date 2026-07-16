@@ -156,6 +156,54 @@ validada no VPS.
 4. Corrigir a limpeza é conversa: "não jogue fora e-mails da escola" vira
    memória e a IA respeita. Recuperar e-mail: lixeira do Gmail (30 dias).
 
+## 8. Fase 6 (segundo cérebro: vault + Syncthing + Obsidian)
+
+1. **Migração**: executar `supabase/migrations/0005_fase6.sql` (SQL Editor ou
+   Management API).
+2. **Pasta do vault no VPS** (terminal do navegador da Hostinger):
+   ```bash
+   mkdir -p /root/assistente-vault
+   ```
+   O deploy monta essa pasta dentro do container como `/vault`
+   (variável `VAULT_PATH`). Nada a configurar no `.env` do VPS.
+3. **Testar a captura**: mandar um link de artigo no chat do bot pedindo para
+   salvar → a nota aparece em `/root/assistente-vault/Sources/`. O
+   bibliotecário roda às 04:00 (ou `npm run job:librarian -w apps/server`).
+4. **Syncthing** (espelha o vault no PC e no celular — passo a passo leigo):
+
+   *O que é:* um programa que mantém a MESMA pasta igualzinha em vários
+   aparelhos, direto entre eles (sem nuvem de terceiros).
+
+   **a) No VPS:**
+   ```bash
+   apt install -y syncthing
+   systemctl enable --now syncthing@root
+   # liberar a GUI só para configurar (senha primeiro!):
+   syncthing cli config gui raw-address set 0.0.0.0:8384
+   systemctl restart syncthing@root
+   ```
+   - No painel de firewall da Hostinger, liberar as portas **8384** (TCP,
+     temporária, só para configurar) e **22000** (TCP e UDP, permanente).
+   - Abrir `http://IP-DO-VPS:8384` no navegador → Actions → Settings → GUI →
+     definir **usuário e senha** (obrigatório antes de qualquer outra coisa).
+   - Actions → Show ID → esse é o **Device ID do VPS** (um QR/código longo).
+   - Add Folder: Folder Path `/root/assistente-vault`, Label `vault`.
+5. **No PC (Windows)**: instalar o [Syncthing](https://syncthing.net/downloads/)
+   (ou SyncTrayzor). Abrir a GUI local → Add Remote Device → colar o Device
+   ID do VPS → no VPS, aceitar o convite e **compartilhar a pasta `vault`**
+   com o PC → no PC, aceitar a pasta e escolher um caminho (ex.:
+   `C:\Users\LUIS BARBOSA\assistente-vault`).
+6. **No celular**: Android → app "Syncthing-Fork" (Play Store); iPhone →
+   "Möbius Sync" (App Store). Mesmo processo: parear com o Device ID do VPS
+   e aceitar a pasta `vault`.
+7. **Obsidian**: instalar no PC/celular e "Open folder as vault" apontando
+   para a pasta sincronizada. `Sources/` = capturas; `Wiki/` = páginas do
+   bibliotecário; comece por `Wiki/Index.md`.
+8. Depois de tudo pareado, **fechar a porta 8384** no firewall (a GUI volta
+   a ser local); a 22000 fica aberta (é a porta de sincronização).
+9. **Recuperação do índice** (se precisar): `npm run job:reindex-vault -w apps/server`
+   reconstrói a busca a partir dos arquivos.
+
 ## Notas
 
 - O web app da v1 sai do ar junto com a v1; ele volta servido pela v2
