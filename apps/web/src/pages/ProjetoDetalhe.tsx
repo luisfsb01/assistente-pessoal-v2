@@ -61,12 +61,14 @@ export default function ProjetoDetalhe() {
   const [statusDraft, setStatusDraft] = useState('')
   const [archiving, setArchiving] = useState(false)
 
-  async function touchProject() {
+  // Retorna a mensagem de erro (se houver) para o chamador reafirmá-la depois
+  // do load() — que limpa o estado de erro ao recarregar.
+  async function touchProject(): Promise<string | null> {
     const { error } = await supabase
       .from('projects')
       .update({ updated_at: new Date().toISOString() })
       .eq('id', id)
-    if (error) setError(error.message)
+    return error?.message ?? null
   }
 
   async function load() {
@@ -104,16 +106,18 @@ export default function ProjetoDetalhe() {
       .update({ status: next, done_at: next === 'done' ? new Date().toISOString() : null })
       .eq('id', t.id)
     if (error) { setError(error.message); return }
-    await touchProject()
+    const touchError = await touchProject()
     await load()
+    if (touchError) setError(touchError)
   }
 
   async function deleteTask(t: PTask) {
     setError(null)
     const { error } = await supabase.from('project_tasks').delete().eq('id', t.id)
     if (error) { setError(error.message); return }
-    await touchProject()
+    const touchError = await touchProject()
     await load()
+    if (touchError) setError(touchError)
   }
 
   async function handleAddTask(e: FormEvent) {
@@ -127,8 +131,9 @@ export default function ProjetoDetalhe() {
     })
     if (error) { setError(error.message); return }
     setNewTask(''); setNewTaskDue('')
-    await touchProject()
+    const touchError = await touchProject()
     await load()
+    if (touchError) setError(touchError)
   }
 
   async function handleAddNote(e: FormEvent) {
@@ -142,8 +147,9 @@ export default function ProjetoDetalhe() {
     })
     if (error) { setError(error.message); return }
     setNewNote('')
-    await touchProject()
+    const touchError = await touchProject()
     await load()
+    if (touchError) setError(touchError)
   }
 
   // Status novo = campo do projeto + entrada na linha do tempo (espelha o chat)
