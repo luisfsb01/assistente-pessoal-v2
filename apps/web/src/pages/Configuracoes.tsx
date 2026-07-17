@@ -109,7 +109,7 @@ export default function Configuracoes() {
         <p className="text-sm text-muted mt-1">Aparência, integrações e o comportamento do assistente</p>
       </div>
 
-      {/* Aparência — INALTERADO (copiar o card atual daqui do arquivo existente) */}
+      {/* Aparência */}
       <div className="card">
         <h2 className="font-semibold text-ink mb-3">Aparência</h2>
         <div className="flex items-center justify-between gap-4">
@@ -136,7 +136,7 @@ export default function Configuracoes() {
         </div>
       </div>
 
-      {/* Bancos (Open Finance) — INALTERADO (copiar o card atual) */}
+      {/* Bancos (Open Finance) */}
       <div className="card">
         <h2 className="font-semibold text-ink mb-2">Bancos</h2>
         <p className="text-sm text-muted mb-4">
