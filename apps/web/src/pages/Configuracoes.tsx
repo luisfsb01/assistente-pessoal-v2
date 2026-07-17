@@ -203,6 +203,7 @@ export default function Configuracoes() {
             <label className="text-xs font-medium text-muted">Silêncio: início</label>
             <input
               type="time"
+              required
               value={proactivity.quietStart}
               onChange={(e) => setProactivity({ ...proactivity, quietStart: e.target.value })}
               className="input"
@@ -212,6 +213,7 @@ export default function Configuracoes() {
             <label className="text-xs font-medium text-muted">Silêncio: fim</label>
             <input
               type="time"
+              required
               value={proactivity.quietEnd}
               onChange={(e) => setProactivity({ ...proactivity, quietEnd: e.target.value })}
               className="input"
@@ -253,6 +255,7 @@ export default function Configuracoes() {
               <span className="text-sm text-ink flex-1 min-w-[180px]">{ROUTINE_LABEL[key]}</span>
               <input
                 type="time"
+                required
                 value={routines[key].time}
                 onChange={(e) => setRoutines({ ...routines, [key]: { ...routines[key], time: e.target.value } })}
                 disabled={!routines[key].enabled}

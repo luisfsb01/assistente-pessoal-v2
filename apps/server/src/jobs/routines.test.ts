@@ -1,3 +1,4 @@
+import '../test-setup.js';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_ROUTINES, dueRoutines, getRoutinesConfig, type RoutinesConfig } from './routines.js';
 

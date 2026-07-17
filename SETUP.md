@@ -223,7 +223,7 @@ validada no VPS.
 ## 10. Fase 8 (web app: controle do assistente)
 
 1. **Migração**: executar `supabase/migrations/0007_fase8.sql` (SQL Editor ou
-   Management API) — policies de RLS para o web + função `month_cost_by_purpose`.
+   Management API) — policies de RLS para o web + função `month_cost_by_purpose`. Antes de aplicar, confirmar no painel do Supabase (Authentication → Sign In / Up) que novos cadastros estão desabilitados — as policies dão acesso total a qualquer conta autenticada.
 2. Nada novo no `.env`.
 3. No web app: páginas novas Tarefas, Compras, Hábitos, Projetos e Memórias;
    em Configurações, o assistente (silêncio, teto, horário e liga/desliga das
