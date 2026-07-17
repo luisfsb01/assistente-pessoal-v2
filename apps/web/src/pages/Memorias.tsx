@@ -70,11 +70,18 @@ export default function Memorias() {
     if (!editing || !editContent.trim()) return
     setSavingEdit(true)
     setError(null)
-    const res = await apiFetch(`/api/memories/${editing.id}`, {
-      method: 'PUT',
-      body: JSON.stringify({ content: editContent.trim() }),
-    })
-    setSavingEdit(false)
+    let res: Response
+    try {
+      res = await apiFetch(`/api/memories/${editing.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ content: editContent.trim() }),
+      })
+    } catch {
+      setError('Erro de rede ao salvar a memória — tente de novo.')
+      return
+    } finally {
+      setSavingEdit(false)
+    }
     if (!res.ok) {
       const body = await res.json().catch(() => null) as { error?: string } | null
       setError(body?.error ?? `Erro ${res.status} ao salvar a memória`)
