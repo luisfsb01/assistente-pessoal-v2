@@ -8,6 +8,7 @@ import Compras from './pages/Compras'
 import Habitos from './pages/Habitos'
 import Projetos from './pages/Projetos'
 import ProjetoDetalhe from './pages/ProjetoDetalhe'
+import Memorias from './pages/Memorias'
 import Categorias from './pages/Categorias'
 import Configuracoes from './pages/Configuracoes'
 import Compromissos from './pages/Compromissos'
@@ -47,6 +48,7 @@ export default function App() {
         <Route path="/habitos" element={<Habitos />} />
         <Route path="/projetos" element={<Projetos />} />
         <Route path="/projetos/:id" element={<ProjetoDetalhe />} />
+        <Route path="/memorias" element={<Memorias />} />
         <Route path="/transacoes" element={<Transacoes />} />
         <Route path="/categorias" element={<Categorias />} />
         <Route path="/objetivos" element={<Objetivos />} />
