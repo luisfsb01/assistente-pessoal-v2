@@ -62,7 +62,11 @@ export default function ProjetoDetalhe() {
   const [archiving, setArchiving] = useState(false)
 
   async function touchProject() {
-    await supabase.from('projects').update({ updated_at: new Date().toISOString() }).eq('id', id)
+    const { error } = await supabase
+      .from('projects')
+      .update({ updated_at: new Date().toISOString() })
+      .eq('id', id)
+    if (error) setError(error.message)
   }
 
   async function load() {
