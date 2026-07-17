@@ -220,6 +220,17 @@ validada no VPS.
 4. **Teste manual**: `npm run job:checkin -w apps/server` (envia as
    perguntas pendentes agora).
 
+## 10. Fase 8 (web app: controle do assistente)
+
+1. **Migração**: executar `supabase/migrations/0007_fase8.sql` (SQL Editor ou
+   Management API) — policies de RLS para o web + função `month_cost_by_purpose`.
+2. Nada novo no `.env`.
+3. No web app: páginas novas Tarefas, Compras, Hábitos, Projetos e Memórias;
+   em Configurações, o assistente (silêncio, teto, horário e liga/desliga das
+   rotinas — mudança vale no minuto seguinte) e o custo de IA do mês vs teto.
+4. Os horários das rotinas saem de `app_state.routines_config` (defaults:
+   briefing 07:00, casal sáb 08:00, revisão financeira 08:00, check-in 21:00).
+
 ## Notas
 
 - O web app da v1 sai do ar junto com a v1; ele volta servido pela v2
