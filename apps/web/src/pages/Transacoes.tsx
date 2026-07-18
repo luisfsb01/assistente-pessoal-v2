@@ -107,6 +107,11 @@ export default function Transacoes() {
   const [bulkCategoria, setBulkCategoria] = useState<string>('')
   const [bulkSubcategoria, setBulkSubcategoria] = useState<string>('')
 
+  // Exclusão com confirmação em Modal (F9: fim dos alert/confirm)
+  const [deletingTx, setDeletingTx] = useState<TxRow | null>(null)
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
+
   // Derived: root categories and subcategories for the selected root
   const rootCategories = useMemo(
     () => categories.filter((c) => c.parent_id === null),
@@ -390,10 +395,12 @@ export default function Transacoes() {
     await loadTxs(range.from, range.to)
   }
 
-  async function handleDelete(id: string) {
-    if (!window.confirm('Excluir esta transação?')) return
-    const { error } = await supabase.from('transactions').delete().eq('id', id)
-    if (error) { alert(error.message); return }
+  async function confirmDeleteTx() {
+    if (!deletingTx) return
+    setActionError(null)
+    const { error } = await supabase.from('transactions').delete().eq('id', deletingTx.id)
+    if (error) { setActionError(error.message); setDeletingTx(null); return }
+    setDeletingTx(null)
     await loadTxs(range.from, range.to)
   }
 
@@ -420,7 +427,7 @@ export default function Transacoes() {
       .from('transactions')
       .update({ category_id: categoryId, status: 'confirmed' })
       .in('id', ids)
-    if (error) { alert(error.message); setBulkSaving(false); return }
+    if (error) { setActionError(error.message); setBulkSaving(false); return }
     // Aprende com a reclassificação (fire-and-forget; a lógica de ambiguidade em upsertRule trata conflitos).
     const byId = new Map(txs.map((t) => [t.id, t]))
     for (const id of ids) {
@@ -434,12 +441,13 @@ export default function Transacoes() {
   }
 
   // Exclusão em massa
-  async function handleBulkDelete() {
+  async function confirmBulkDelete() {
     const ids = [...selected]
-    if (ids.length === 0) return
-    if (!window.confirm(`Excluir ${ids.length} transação${ids.length !== 1 ? 'ões' : ''}? Esta ação não pode ser desfeita.`)) return
+    if (ids.length === 0) { setBulkDeleteOpen(false); return }
+    setActionError(null)
     const { error } = await supabase.from('transactions').delete().in('id', ids)
-    if (error) { alert(error.message); return }
+    if (error) { setActionError(error.message); setBulkDeleteOpen(false); return }
+    setBulkDeleteOpen(false)
     await loadTxs(range.from, range.to)
     clearSelection()
   }
@@ -453,7 +461,7 @@ export default function Transacoes() {
       .from('transactions')
       .update({ status: 'confirmed' })
       .in('id', ids)
-    if (error) { alert(error.message); return }
+    if (error) { setActionError(error.message); return }
     await loadTxs(range.from, range.to)
     clearSelection()
   }
@@ -482,6 +490,12 @@ export default function Transacoes() {
           </button>
         </div>
       </div>
+
+      {actionError && (
+        <p className="text-sm text-red-600 bg-red-50 rounded-lg px-4 py-3 border border-red-200">
+          {actionError}
+        </p>
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-end">
@@ -590,7 +604,7 @@ export default function Transacoes() {
           <button onClick={openBulkReclassify} className="btn-ghost">
             Reclassificar
           </button>
-          <button onClick={handleBulkDelete} className="btn-ghost">
+          <button onClick={() => setBulkDeleteOpen(true)} className="btn-ghost">
             Excluir
           </button>
           <button onClick={clearSelection} className="btn-ghost">
@@ -730,7 +744,7 @@ export default function Transacoes() {
                           <Pencil size={16} />
                         </button>
                         <button
-                          onClick={() => handleDelete(t.id)}
+                          onClick={() => setDeletingTx(t)}
                           aria-label="Excluir"
                           title="Excluir"
                           className="p-1.5 rounded-lg text-red-500 hover:bg-red-500/10 transition-colors"
@@ -770,6 +784,40 @@ export default function Transacoes() {
       )}
 
       {/* Modal de sincronização com o banco (Open Finance) volta na Fase 3. */}
+
+      {deletingTx && (
+        <Modal
+          title="Excluir transação"
+          onClose={() => setDeletingTx(null)}
+          footer={
+            <>
+              <button onClick={() => setDeletingTx(null)} className="btn-ghost">Cancelar</button>
+              <button onClick={confirmDeleteTx} className="btn-primary">Excluir</button>
+            </>
+          }
+        >
+          <p className="text-sm text-ink">
+            Excluir "{deletingTx.description}" ({fmtDate(deletingTx.occurred_on)})? Esta ação não pode ser desfeita.
+          </p>
+        </Modal>
+      )}
+
+      {bulkDeleteOpen && (
+        <Modal
+          title="Excluir em lote"
+          onClose={() => setBulkDeleteOpen(false)}
+          footer={
+            <>
+              <button onClick={() => setBulkDeleteOpen(false)} className="btn-ghost">Cancelar</button>
+              <button onClick={confirmBulkDelete} className="btn-primary">Excluir {selected.size}</button>
+            </>
+          }
+        >
+          <p className="text-sm text-ink">
+            Excluir {selected.size} transação{selected.size !== 1 ? 'ões' : ''}? Esta ação não pode ser desfeita.
+          </p>
+        </Modal>
+      )}
 
       {/* Reclassificação em massa */}
       {bulkOpen && (
