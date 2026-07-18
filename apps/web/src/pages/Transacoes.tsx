@@ -8,6 +8,7 @@ import { Modal } from '../components/Modal'
 import { Pencil, Trash2 } from 'lucide-react'
 import { useColumnWidths } from '../lib/useColumnWidths'
 import { ResizableHeader } from '../components/ResizableHeader'
+import { fetchAllPages } from '../lib/fetch-all-pages'
 
 // Colunas de conteúdo redimensionáveis (na ordem em que aparecem)
 const TX_COLS = ['data', 'descricao', 'categoria', 'subcategoria', 'valor', 'origem', 'status'] as const
@@ -184,18 +185,22 @@ export default function Transacoes() {
   async function loadTxs(from: string, to: string) {
     setLoading(true)
     setLoadError(null)
-    const { data, error } = await supabase
-      .from('transactions')
-      .select('id, occurred_on, description, amount, kind, category_id, status, source')
-      .gte('occurred_on', from)
-      .lte('occurred_on', to)
-      .order('occurred_on', { ascending: false })
+    const { rows, error } = await fetchAllPages<TxRow>((pFrom, pTo) =>
+      supabase
+        .from('transactions')
+        .select('id, occurred_on, description, amount, kind, category_id, status, source')
+        .gte('occurred_on', from)
+        .lte('occurred_on', to)
+        .order('occurred_on', { ascending: false })
+        .order('id', { ascending: true }) // desempate: paginação estável
+        .range(pFrom, pTo),
+    )
     if (error) {
-      setLoadError(error.message)
+      setLoadError(error)
       setLoading(false)
       return
     }
-    setTxs((data ?? []) as TxRow[])
+    setTxs(rows)
     setLoading(false)
   }
 
