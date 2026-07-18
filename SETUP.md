@@ -231,6 +231,18 @@ validada no VPS.
 4. Os horários das rotinas saem de `app_state.routines_config` (defaults:
    briefing 07:00, casal sáb 08:00, revisão financeira 08:00, check-in 21:00).
 
+## 11. Fase 9 (dashboard financeiro)
+
+1. **Migração**: executar `supabase/migrations/0008_fase9.sql` (SQL Editor ou
+   Management API) — função `monthly_cashflow` (agregação anual do dashboard).
+2. Nada novo no `.env`.
+3. **UAT**: no Dashboard, conferir que o gráfico anual e o "Saldo no ano"
+   batem com os valores de antes (mesma lógica, agora agregada no banco);
+   Transações paginada (50/página) com totais/seleção/export sobre o filtro
+   inteiro; excluir transação/categoria/objetivo abre modal (sem popups do
+   navegador); no celular, nenhuma página rola na horizontal (a tabela rola
+   dentro do próprio quadro).
+
 ## Notas
 
 - O web app da v1 sai do ar junto com a v1; ele volta servido pela v2

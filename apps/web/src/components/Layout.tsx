@@ -172,7 +172,7 @@ export default function Layout() {
 
         {/* ── Main content ── */}
         <main className="flex-1 overflow-auto">
-          <div className="max-w-[1600px] mx-auto w-full px-6 lg:px-10 py-8">
+          <div className="max-w-[1600px] mx-auto w-full px-4 md:px-6 lg:px-10 py-8">
             <Outlet />
           </div>
         </main>

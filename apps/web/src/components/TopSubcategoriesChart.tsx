@@ -47,11 +47,12 @@ export default function TopSubcategoriesChart({ items, title = 'Top 5 subcategor
             <YAxis
               type="category"
               dataKey="name"
-              width={150}
+              width={110}
               stroke="#94a3b8"
               fontSize={14}
               tickLine={false}
               axisLine={false}
+              tick={{ fontSize: 12 }}
             />
             <Tooltip
               contentStyle={{

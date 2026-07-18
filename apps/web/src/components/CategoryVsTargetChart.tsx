@@ -59,11 +59,12 @@ export default function CategoryVsTargetChart({ items, onSelect, selected }: Pro
               yAxisId={0}
               type="category"
               dataKey="category"
-              width={90}
+              width={80}
               stroke="#94a3b8"
               fontSize={14}
               tickLine={false}
               axisLine={false}
+              tick={{ fontSize: 12 }}
             />
             <YAxis yAxisId={1} type="category" dataKey="category" hide />
             <Tooltip
