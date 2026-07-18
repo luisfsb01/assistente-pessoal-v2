@@ -229,6 +229,19 @@ export default function Transacoes() {
     })
   }, [txs, kindFilter, catFilter, subCatFilter, search, catById])
 
+  // Paginação SÓ da renderização (decisão da F9): totais, seleção em lote e
+  // export continuam sobre o filtro inteiro.
+  const TX_PAGE_SIZE = 50
+  const [page, setPage] = useState(1)
+  const totalPages = Math.max(1, Math.ceil(filtered.length / TX_PAGE_SIZE))
+  const safePage = Math.min(page, totalPages)
+  const pageRows = filtered.slice((safePage - 1) * TX_PAGE_SIZE, safePage * TX_PAGE_SIZE)
+
+  // Filtro/período mudou → volta à página 1.
+  useEffect(() => {
+    setPage(1)
+  }, [kindFilter, catFilter, subCatFilter, search, range.from, range.to])
+
   // Mantém a seleção restrita às linhas visíveis: sempre que os filtros (ou o período)
   // mudam, remove da seleção qualquer id que não esteja mais em `filtered`, evitando
   // que uma ação em massa atinja linhas ocultas.
@@ -647,7 +660,7 @@ export default function Transacoes() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((t) => (
+                {pageRows.map((t) => (
                   <tr
                     key={t.id}
                     className="border-b border-hairline last:border-0 hover:bg-surface-2 transition-colors"
@@ -731,6 +744,28 @@ export default function Transacoes() {
               </tbody>
             </table>
           )}
+        </div>
+      )}
+
+      {!loading && !loadError && filtered.length > TX_PAGE_SIZE && (
+        <div className="flex items-center justify-center gap-4">
+          <button
+            className="btn-ghost"
+            disabled={safePage <= 1}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+          >
+            ‹ Anterior
+          </button>
+          <span className="text-sm text-muted tabular-nums">
+            {(safePage - 1) * TX_PAGE_SIZE + 1}–{Math.min(safePage * TX_PAGE_SIZE, filtered.length)} de {filtered.length}
+          </span>
+          <button
+            className="btn-ghost"
+            disabled={safePage >= totalPages}
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+          >
+            Próxima ›
+          </button>
         </div>
       )}
 
