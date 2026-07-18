@@ -9,6 +9,10 @@ import CategoryVsTargetChart from '../components/CategoryVsTargetChart'
 import TopSubcategoriesChart from '../components/TopSubcategoriesChart'
 import GoalsSection from '../components/GoalsSection'
 
+const KPI_GRID_STYLE = {
+  gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 11.5rem), 1fr))',
+}
+
 export default function Dashboard() {
   const [period, setPeriod] = useState<PeriodKey>('this_month')
   const [selectedCat, setSelectedCat] = useState<string | null>(null)
@@ -31,13 +35,13 @@ export default function Dashboard() {
   return (
     <div>
       {/* Header */}
-      <div className="flex items-start justify-between gap-4 mb-6">
+      <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
         <div>
           <h1 className="text-3xl font-bold">Visão geral</h1>
           <p className="text-sm text-muted mt-0.5">Resumo das suas finanças</p>
         </div>
         <select
-          className="input w-auto"
+          className="input w-auto max-w-full"
           value={period}
           onChange={(e) => setPeriod(e.target.value as PeriodKey)}
         >
@@ -51,7 +55,7 @@ export default function Dashboard() {
 
       {/* KPIs */}
       {curr.loading || prevData.loading ? (
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-5">
+        <div className="grid gap-4" style={KPI_GRID_STYLE}>
           <div className="card animate-pulse h-28" />
           <div className="card animate-pulse h-28" />
           <div className="card animate-pulse h-28" />
@@ -61,7 +65,7 @@ export default function Dashboard() {
       ) : curr.error ? (
         <div className="card text-red-600">{curr.error}</div>
       ) : (
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-5">
+        <div className="grid gap-4" style={KPI_GRID_STYLE}>
           <Kpi
             hero
             label="Saldo do período"

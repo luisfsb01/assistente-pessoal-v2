@@ -1,5 +1,14 @@
-import { applyRules, setTransactionCategory, upsertBankTransactions } from '../db/finance.js';
-import { listBankTransactions } from '../lib/banco-mcp.js';
+import {
+  applyRules,
+  getLastImportedDate,
+  getLatestBankTransactionDate,
+  setLastImportedDate,
+  setTransactionCategory,
+  upsertBankTransactions,
+} from '../db/finance.js';
+import { isBankConfigured, listBankTransactions } from '../lib/banco-mcp.js';
+import { getConfig } from '../lib/config.js';
+import { todayInTz } from '../lib/dates.js';
 
 export type BankSyncDeps = {
   listBankTransactions: typeof listBankTransactions;
@@ -31,4 +40,46 @@ export async function syncBankTransactions(
     if (ok) autoClassified++;
   }
   return { imported: inserted.length, autoClassified };
+}
+
+export class BankNotConfiguredError extends Error {
+  constructor() {
+    super('Integração bancária não configurada.');
+    this.name = 'BankNotConfiguredError';
+  }
+}
+
+export type ManualBankSyncDeps = {
+  isBankConfigured(): boolean;
+  getLastImportedDate(): Promise<string | null>;
+  getLatestBankTransactionDate(): Promise<string | null>;
+  setLastImportedDate(date: string): Promise<void>;
+  today(): string;
+  sync(fromDate: string, toDate: string): Promise<{ imported: number; autoClassified: number }>;
+};
+
+const defaultManualDeps: ManualBankSyncDeps = {
+  isBankConfigured,
+  getLastImportedDate,
+  getLatestBankTransactionDate,
+  setLastImportedDate,
+  today: () => todayInTz(getConfig().TIMEZONE),
+  sync: (fromDate, toDate) => syncBankTransactions(fromDate, toDate),
+};
+
+/** Sincroniza manualmente da última data conhecida até hoje, incluindo a
+ * data inicial para capturar lançamentos tardios. O upsert por external_id
+ * mantém a operação idempotente. O cursor só avança depois do sucesso. */
+export async function syncBankTransactionsToToday(
+  deps: ManualBankSyncDeps = defaultManualDeps,
+): Promise<{ from: string; to: string; imported: number; autoClassified: number }> {
+  if (!deps.isBankConfigured()) throw new BankNotConfiguredError();
+
+  const to = deps.today();
+  const stored = await deps.getLastImportedDate();
+  const latest = stored ?? await deps.getLatestBankTransactionDate();
+  const from = latest && latest <= to ? latest : to;
+  const result = await deps.sync(from, to);
+  await deps.setLastImportedDate(to);
+  return { from, to, ...result };
 }

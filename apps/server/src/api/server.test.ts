@@ -11,6 +11,12 @@ describe('resolveWebDist', () => {
     const result = resolveWebDist(cwd).replace(/\\/g, '/');
     expect(result.endsWith('algum/repo/apps/web/dist')).toBe(true);
   });
+
+  it('sem raiz explícita encontra o build web mesmo quando o script roda pelo workspace', () => {
+    const result = resolveWebDist().replace(/\\/g, '/');
+    expect(result.endsWith('/apps/web/dist')).toBe(true);
+    expect(result).not.toContain('/apps/server/apps/web/dist');
+  });
 });
 
 describe('createApp', () => {
@@ -30,6 +36,16 @@ describe('createApp', () => {
     const res = await app.request('/health');
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
+    expect(res.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(res.headers.get('x-frame-options')).toBe('DENY');
+    expect(res.headers.get('content-security-policy')).toContain("default-src 'self'");
+  });
+
+  it('mantém a API disponível quando o build do frontend ainda não existe', async () => {
+    const app = createApp(join(dir, 'dist-inexistente'));
+    const res = await app.request('/health');
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
   });
 
   it('faz fallback para index.html em rotas desconhecidas (SPA)', async () => {
@@ -46,6 +62,13 @@ describe('createApp', () => {
       updateMemoryContent: async () => true,
       getMonthCostBrl: async () => 12.34,
       getMonthCostByPurpose: async () => [{ purpose: 'chat', costBrl: 10 }],
+      getMonthlyCostHistory: async () => [
+        { month: '2026-06', costBrl: 8 },
+        { month: '2026-07', costBrl: 12.34 },
+      ],
+      syncBankTransactions: async () => ({
+        from: '2026-07-15', to: '2026-07-18', imported: 3, autoClassified: 2,
+      }),
       budgetBrl: () => 50,
       ...over,
     };
@@ -62,6 +85,14 @@ describe('createApp', () => {
       ).toBe(401);
     });
 
+    it('limita globalmente tentativas antes de consultar a autenticação', async () => {
+      const app = createApp(dir, fakeDeps());
+      for (let i = 0; i < 600; i += 1) {
+        expect((await app.request('/api/llm-cost')).status).toBe(401);
+      }
+      expect((await app.request('/api/llm-cost')).status).toBe(429);
+    });
+
     it('GET /api/llm-cost retorna gasto, teto e quebra por finalidade', async () => {
       const app = createApp(dir, fakeDeps());
       const res = await app.request('/api/llm-cost', { headers: auth });
@@ -70,7 +101,29 @@ describe('createApp', () => {
         spentBrl: 12.34,
         budgetBrl: 50,
         byPurpose: [{ purpose: 'chat', costBrl: 10 }],
+        history: [
+          { month: '2026-06', costBrl: 8 },
+          { month: '2026-07', costBrl: 12.34 },
+        ],
       });
+    });
+
+    it('POST /api/finance/sync executa a busca incremental autenticada', async () => {
+      const app = createApp(dir, fakeDeps());
+      const res = await app.request('/api/finance/sync', { method: 'POST', headers: auth });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({
+        from: '2026-07-15', to: '2026-07-18', imported: 3, autoClassified: 2,
+      });
+    });
+
+    it('POST /api/finance/sync não expõe detalhes de falha do provedor', async () => {
+      const app = createApp(dir, fakeDeps({
+        syncBankTransactions: async () => { throw new Error('resposta sensível do provedor'); },
+      }));
+      const res = await app.request('/api/finance/sync', { method: 'POST', headers: auth });
+      expect(res.status).toBe(502);
+      expect(await res.json()).toEqual({ error: 'Não foi possível buscar novas transações agora.' });
     });
 
     it('PUT /api/memories/:id regera o embedding e atualiza', async () => {
@@ -107,6 +160,17 @@ describe('createApp', () => {
         body: JSON.stringify({ content: 'ok' }),
       });
       expect(inexistente.status).toBe(404);
+    });
+
+    it('limita conteúdo e desabilita cache nas respostas autenticadas', async () => {
+      const app = createApp(dir, fakeDeps());
+      const res = await app.request('/api/memories/x', {
+        method: 'PUT',
+        headers: { ...auth, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: 'x'.repeat(5_001) }),
+      });
+      expect(res.status).toBe(400);
+      expect(res.headers.get('cache-control')).toBe('no-store');
     });
 
     it('rota /api desconhecida responde 404 (não cai no fallback da SPA)', async () => {

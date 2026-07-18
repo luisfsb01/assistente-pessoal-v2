@@ -3,6 +3,7 @@ import { useTheme } from '../lib/useTheme'
 import { supabase } from '../lib/supabase'
 import { apiFetch } from '../lib/api'
 import { formatBrl } from '../lib/format'
+import LlmCostChart from '../components/LlmCostChart'
 
 interface ProactivityConfig {
   quietStart: string
@@ -17,6 +18,7 @@ interface LlmCost {
   spentBrl: number
   budgetBrl: number
   byPurpose: Array<{ purpose: string; costBrl: number }>
+  history: Array<{ month: string; costBrl: number }>
 }
 
 // Defaults espelham o servidor (proactive/rules.ts e jobs/routines.ts)
@@ -51,6 +53,21 @@ export default function Configuracoes() {
   const [cost, setCost] = useState<LlmCost | null>(null)
   const [costError, setCostError] = useState<string | null>(null)
 
+  async function loadCost() {
+    setCostError(null)
+    try {
+      const res = await apiFetch('/api/llm-cost')
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as { error?: string }
+        setCostError(body.error ?? `Erro ${res.status} ao carregar o custo`)
+        return
+      }
+      setCost(await res.json() as LlmCost)
+    } catch {
+      setCostError('Erro de rede ao carregar o custo')
+    }
+  }
+
   useEffect(() => {
     supabase
       .from('app_state')
@@ -74,10 +91,7 @@ export default function Configuracoes() {
         setConfigLoaded(true)
       })
 
-    apiFetch('/api/llm-cost').then(async (res) => {
-      if (!res.ok) { setCostError(`Erro ${res.status} ao carregar o custo`); return }
-      setCost(await res.json() as LlmCost)
-    }).catch(() => setCostError('Erro de rede ao carregar o custo'))
+    loadCost()
   }, [])
 
   async function handleSave(e: FormEvent) {
@@ -166,7 +180,12 @@ export default function Configuracoes() {
       {/* Custo LLM */}
       <div className="card">
         <h2 className="font-semibold text-ink mb-3">Custo de IA no mês</h2>
-        {costError && <p className="text-sm text-red-600">{costError}</p>}
+        {costError && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3">
+            <p className="text-sm text-red-600 dark:text-red-300">{costError}</p>
+            <button type="button" onClick={loadCost} className="btn-ghost">Tentar novamente</button>
+          </div>
+        )}
         {!cost && !costError && <p className="text-sm text-muted">Carregando…</p>}
         {cost && (
           <div className="flex flex-col gap-3">
@@ -189,6 +208,7 @@ export default function Configuracoes() {
                 </tbody>
               </table>
             )}
+            <LlmCostChart history={cost.history ?? []} />
           </div>
         )}
       </div>

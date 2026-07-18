@@ -10,7 +10,7 @@ import { decodeAction } from './callback.js';
 
 export function createBot(
   token: string,
-  handle: (msg: { chatId: number; text: string }) => Promise<string | null>,
+  handle: (msg: { chatId: number; senderId?: number; text: string }) => Promise<string | null>,
 ): Bot {
   const bot = new Bot(token);
 
@@ -21,10 +21,20 @@ export function createBot(
   // Botões de hábito/tarefa vencida: check-in das 21:00.
   bot.on('callback_query:data', async (ctx) => {
     try {
+      const chatId = ctx.chat?.id;
+      const identity = chatId === undefined ? null : await getChatIdentity(chatId, ctx.from.id);
+      if (!identity) {
+        await ctx.answerCallbackQuery({ text: 'Não autorizado.' });
+        return;
+      }
       const action = decodeAction(ctx.callbackQuery.data);
       if (!action) return void (await ctx.answerCallbackQuery());
 
       if (action.kind === 'fin') {
+        if (identity.kind !== 'private' || identity.subject !== 'luis') {
+          await ctx.answerCallbackQuery({ text: 'Não autorizado.' });
+          return;
+        }
         const ok = await confirmTransaction(action.txId);
         await ctx.answerCallbackQuery({ text: ok ? 'Confirmado ✅' : 'Não encontrada' });
         if (!ok) return;
@@ -41,8 +51,6 @@ export function createBot(
       }
 
       if (action.kind === 'hab') {
-        const chatId = ctx.chat?.id;
-        const identity = chatId !== undefined ? await getChatIdentity(chatId) : null;
         if (!identity?.subject || chatId === undefined) return void (await ctx.answerCallbackQuery());
         const today = todayInTz(getConfig().TIMEZONE);
         const result = await registerHabitAnswer(action.habitId, action.done, today);
@@ -63,6 +71,10 @@ export function createBot(
       }
 
       // ptask: tarefa de projeto vencida do check-in
+      if (identity.kind !== 'private' || !identity.subject) {
+        await ctx.answerCallbackQuery({ text: 'Não autorizado.' });
+        return;
+      }
       if (action.action === 'done') {
         await moveProjectTask(action.taskId, 'done');
         await ctx.answerCallbackQuery({ text: 'Concluída ✅' });
@@ -89,7 +101,7 @@ export function createBot(
         : `${ctx.from?.first_name ?? 'Alguém'}: ${ctx.message.text}`;
     try {
       await ctx.replyWithChatAction('typing');
-      const reply = await handle({ chatId: ctx.chat.id, text });
+      const reply = await handle({ chatId: ctx.chat.id, senderId: ctx.from.id, text });
       if (reply) await ctx.reply(reply); // null = chat não cadastrado → ignora em silêncio
     } catch (err) {
       console.error('[bot]', err);

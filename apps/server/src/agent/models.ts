@@ -17,9 +17,29 @@ export type Purpose = 'chat' | 'reflection' | 'briefing' | 'analysis' | 'embeddi
 
 const STRONG_PURPOSES: ReadonlySet<Purpose> = new Set(['briefing', 'analysis']);
 
-export function pickModelId(purpose: Purpose, status: BudgetStatus, cfg: Config): string {
-  if (status !== 'exceeded' && STRONG_PURPOSES.has(purpose)) return cfg.MODEL_STRONG_ID;
+export function pickModelId(
+  purpose: Purpose,
+  status: BudgetStatus,
+  cfg: Config,
+  preferStrong = false,
+): string {
+  if (status !== 'exceeded' && (preferStrong || STRONG_PURPOSES.has(purpose))) return cfg.MODEL_STRONG_ID;
   return cfg.MODEL_DEFAULT_ID;
+}
+
+const CHAT_DOMAINS = [
+  /\b(tarefa|prazo|pend[eê]ncia)\w*/i,
+  /\b(agenda|calend[aá]rio|compromisso|reuni[aã]o)\w*/i,
+  /\b(gasto|receita|or[cç]amento|finan[cç]|banco|fatura)\w*/i,
+  /\b(h[aá]bito|academia|treino|leitura)\w*/i,
+  /\b(projeto|kanban|status)\w*/i,
+  /\b(e-?mail|gmail|mensagem)\w*/i,
+  /\b(compra|mercado|lista)\w*/i,
+];
+
+/** Escala conversas que cruzam dois ou mais domínios pessoais. */
+export function shouldUseStrongChatModel(text: string): boolean {
+  return CHAT_DOMAINS.filter((pattern) => pattern.test(text)).length >= 2;
 }
 
 export type LlmDeps = {
@@ -30,12 +50,16 @@ export type LlmDeps = {
 
 export function defaultLlmDeps(): LlmDeps {
   const cfg = getConfig();
-  const openai = createOpenAI({ apiKey: cfg.OPENAI_API_KEY });
+  const openai = createOpenAI({
+    apiKey: cfg.LLM_API_KEY ?? cfg.OPENAI_API_KEY,
+    ...(cfg.LLM_BASE_URL ? { baseURL: cfg.LLM_BASE_URL } : {}),
+  });
   return { createModel: (id) => openai(id), record: recordUsage, monthCost: getMonthCostBrl };
 }
 
 type CommonOpts = {
   purpose: Purpose;
+  preferStrong?: boolean;
   onBudgetAlert?: (status: BudgetStatus, monthCostBrl: number) => Promise<void>;
 };
 
@@ -50,7 +74,7 @@ async function prepare(opts: CommonOpts, deps: LlmDeps) {
       console.error('[models] onBudgetAlert falhou', err);
     }
   }
-  return { cfg, modelId: pickModelId(opts.purpose, status, cfg) };
+  return { cfg, modelId: pickModelId(opts.purpose, status, cfg, opts.preferStrong) };
 }
 
 async function record(

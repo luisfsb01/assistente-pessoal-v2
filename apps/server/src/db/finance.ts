@@ -1,6 +1,7 @@
 import { nextReviewCode } from '../lib/review-code.js';
 import { supabase } from './client.js';
 import { getState, setState } from './state.js';
+import { escapeLikePattern } from '../lib/postgrest.js';
 
 export interface Category {
   id: string;
@@ -33,7 +34,7 @@ export async function listCategories(): Promise<Category[]> {
 }
 
 export async function getCategoryByName(name: string): Promise<Category | null> {
-  const { data, error } = await supabase.from('categories').select(CAT_COLS).ilike('name', name).maybeSingle();
+  const { data, error } = await supabase.from('categories').select(CAT_COLS).ilike('name', escapeLikePattern(name)).maybeSingle();
   if (error) throw error;
   return data;
 }
@@ -187,7 +188,7 @@ export async function ensureReviewCode(txId: string): Promise<string | null> {
 }
 
 export async function getTransactionByReviewCode(code: string): Promise<Transaction | null> {
-  const { data, error } = await supabase.from('transactions').select(TX_COLS).ilike('review_code', code).maybeSingle();
+  const { data, error } = await supabase.from('transactions').select(TX_COLS).ilike('review_code', escapeLikePattern(code)).maybeSingle();
   if (error) throw error;
   return data as Transaction | null;
 }
@@ -301,6 +302,20 @@ export async function getLastImportedDate(): Promise<string | null> {
 
 export async function setLastImportedDate(date: string): Promise<void> {
   await setState(LAST_IMPORT_KEY, date);
+}
+
+/** Data da transação bancária mais recente, usada como fallback em
+ * instalações antigas que ainda não possuam `finance_last_imported`. */
+export async function getLatestBankTransactionDate(): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('occurred_on')
+    .eq('source', 'bank')
+    .order('occurred_on', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.occurred_on ?? null;
 }
 
 /** Despesas vindas do banco desde uma data (para o coletor de proatividade). */

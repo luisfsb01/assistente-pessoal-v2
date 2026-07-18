@@ -2,12 +2,12 @@
 // de './models.js' avalie db/client.ts (que chama getConfig() no top-level).
 import '../test-setup.js';
 import { describe, expect, it } from 'vitest';
-import { MockLanguageModelV2 } from 'ai/test';
+import { MockLanguageModelV3 } from 'ai/test';
 import { tool, type ToolSet } from 'ai';
 import { z } from 'zod';
 import { loadConfig } from '../lib/config.js';
 import type { UsageRow } from '../db/usage.js';
-import { generateAgentText, pickModelId, type LlmDeps } from './models.js';
+import { generateAgentText, pickModelId, shouldUseStrongChatModel, type LlmDeps } from './models.js';
 
 const cfg = loadConfig({
   TELEGRAM_TOKEN: 't',
@@ -17,10 +17,13 @@ const cfg = loadConfig({
 } as NodeJS.ProcessEnv);
 
 function mockModel(text: string) {
-  return new MockLanguageModelV2({
+  return new MockLanguageModelV3({
     doGenerate: async () => ({
       finishReason: 'stop',
-      usage: { inputTokens: 100, outputTokens: 20, totalTokens: 120 },
+      usage: {
+        inputTokens: { total: 100, noCache: 100, cacheRead: 0, cacheWrite: 0 },
+        outputTokens: { total: 20, text: 20, reasoning: 0 },
+      },
       content: [{ type: 'text', text }],
       warnings: [],
     }),
@@ -41,6 +44,10 @@ describe('pickModelId', () => {
   it('chat usa o modelo default', () => {
     expect(pickModelId('chat', 'ok', cfg)).toBe(cfg.MODEL_DEFAULT_ID);
   });
+  it('chat complexo pode pedir modelo forte sem furar orçamento', () => {
+    expect(pickModelId('chat', 'ok', cfg, true)).toBe(cfg.MODEL_STRONG_ID);
+    expect(pickModelId('chat', 'exceeded', cfg, true)).toBe(cfg.MODEL_DEFAULT_ID);
+  });
   it('briefing e analysis usam o modelo forte', () => {
     expect(pickModelId('briefing', 'ok', cfg)).toBe(cfg.MODEL_STRONG_ID);
     expect(pickModelId('analysis', 'warn', cfg)).toBe(cfg.MODEL_STRONG_ID);
@@ -56,6 +63,13 @@ describe('pickModelId', () => {
   });
   it('librarian usa o modelo default mesmo com orçamento ok', () => {
     expect(pickModelId('librarian', 'ok', cfg)).toBe(cfg.MODEL_DEFAULT_ID);
+  });
+});
+
+describe('shouldUseStrongChatModel', () => {
+  it('escala pedido que cruza domínios e mantém pedido simples no default', () => {
+    expect(shouldUseStrongChatModel('organize minhas tarefas considerando agenda e orçamento')).toBe(true);
+    expect(shouldUseStrongChatModel('adicione leite na lista de compras')).toBe(false);
   });
 });
 
@@ -92,20 +106,26 @@ describe('generateAgentText', () => {
   it('registra a soma do uso de TODOS os passos (totalUsage), não só do último', async () => {
     const recorded: UsageRow[] = [];
     let call = 0;
-    const twoStepModel = new MockLanguageModelV2({
+    const twoStepModel = new MockLanguageModelV3({
       doGenerate: async () => {
         call++;
         if (call === 1) {
           return {
             finishReason: 'tool-calls',
-            usage: { inputTokens: 50, outputTokens: 10, totalTokens: 60 },
+            usage: {
+              inputTokens: { total: 50, noCache: 50, cacheRead: 0, cacheWrite: 0 },
+              outputTokens: { total: 10, text: 10, reasoning: 0 },
+            },
             content: [{ type: 'tool-call', toolCallId: 'call1', toolName: 'ping', input: '{}' }],
             warnings: [],
           };
         }
         return {
           finishReason: 'stop',
-          usage: { inputTokens: 80, outputTokens: 15, totalTokens: 95 },
+          usage: {
+            inputTokens: { total: 80, noCache: 80, cacheRead: 0, cacheWrite: 0 },
+            outputTokens: { total: 15, text: 15, reasoning: 0 },
+          },
           content: [{ type: 'text', text: 'pronto' }],
           warnings: [],
         };

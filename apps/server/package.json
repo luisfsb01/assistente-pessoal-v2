@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "web-api:dev": "tsx watch src/scripts/run-web-api.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "job:reflect": "tsx src/scripts/run-reflection.ts",
@@ -17,16 +18,16 @@
     "job:checkin": "tsx src/scripts/run-checkin.ts"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^2.0.0",
+    "@ai-sdk/openai": "^4.0.16",
     "@hono/node-server": "^2.0.8",
     "@mozilla/readability": "^0.6.0",
     "@supabase/supabase-js": "^2.45.0",
-    "ai": "^5.0.0",
+    "ai": "^7.0.31",
     "googleapis": "^173.0.0",
     "grammy": "^1.30.0",
     "hono": "^4.12.29",
     "jsdom": "^29.1.1",
-    "node-cron": "^3.0.3",
+    "node-cron": "^4.6.0",
     "turndown": "^7.2.4",
     "zod": "^3.25.0"
   },

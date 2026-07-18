@@ -5,10 +5,11 @@ import { formatBrl } from '../lib/format'
 import { type PeriodKey, PERIOD_LABELS, periodRange } from '../lib/period'
 import type { Category } from '../lib/finance-data'
 import { Modal } from '../components/Modal'
-import { Pencil, Trash2 } from 'lucide-react'
+import { Pencil, RefreshCw, Trash2 } from 'lucide-react'
 import { useColumnWidths } from '../lib/useColumnWidths'
 import { ResizableHeader } from '../components/ResizableHeader'
 import { fetchAllPages } from '../lib/fetch-all-pages'
+import { apiFetch } from '../lib/api'
 
 // Colunas de conteúdo redimensionáveis (na ordem em que aparecem)
 const TX_COLS = ['data', 'descricao', 'categoria', 'subcategoria', 'valor', 'origem', 'status'] as const
@@ -32,6 +33,13 @@ interface TxRow {
   category_id: string | null
   status: 'pending_review' | 'confirmed'
   source: 'manual' | 'bank'
+}
+
+type SyncResult = {
+  from: string
+  to: string
+  imported: number
+  autoClassified: number
 }
 
 function fmtDate(iso: string): string {
@@ -85,7 +93,10 @@ export default function Transacoes() {
   const [subCatFilter, setSubCatFilter] = useState<string>('todas')
   const [search, setSearch] = useState('')
 
-  // Sincronização com o banco (Open Finance): volta na Fase 3.
+  // Sincronização manual com o banco (Open Finance)
+  const [syncing, setSyncing] = useState(false)
+  const [syncMessage, setSyncMessage] = useState<string | null>(null)
+  const [syncError, setSyncError] = useState<string | null>(null)
 
   // Modal
   const [modal, setModal] = useState<ModalState>(EMPTY_MODAL)
@@ -309,6 +320,36 @@ export default function Transacoes() {
     URL.revokeObjectURL(url)
   }
 
+  async function handleBankSync() {
+    if (syncing) return
+    setSyncing(true)
+    setSyncMessage(null)
+    setSyncError(null)
+    try {
+      const res = await apiFetch('/api/finance/sync', { method: 'POST' })
+      const body = await res.json().catch(() => ({})) as Partial<SyncResult> & { error?: string }
+      if (!res.ok) throw new Error(body.error || 'Não foi possível atualizar as transações.')
+
+      const result = body as SyncResult
+      await loadTxs(range.from, range.to)
+      const interval = `${result.from.split('-').reverse().join('/')} a ${result.to.split('-').reverse().join('/')}`
+      if (result.imported === 0) {
+        setSyncMessage(`Tudo atualizado. Nenhuma nova transação encontrada de ${interval}.`)
+      } else {
+        const classified = result.autoClassified > 0
+          ? ` ${result.autoClassified} classificada${result.autoClassified === 1 ? '' : 's'} automaticamente.`
+          : ''
+        setSyncMessage(
+          `${result.imported} nova${result.imported === 1 ? '' : 's'} transação${result.imported === 1 ? '' : 'ões'} importada${result.imported === 1 ? '' : 's'} (${interval}).${classified}`,
+        )
+      }
+    } catch (err) {
+      setSyncError(err instanceof Error ? err.message : 'Não foi possível atualizar as transações.')
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   // Modal helpers
   function openCreate() {
     setFormCategoria('')
@@ -483,7 +524,16 @@ export default function Transacoes() {
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          {/* Botão de sincronização com o banco (Open Finance) volta na Fase 3. */}
+          <button
+            type="button"
+            onClick={handleBankSync}
+            disabled={syncing}
+            className="btn-ghost border border-hairline bg-surface hover:border-brand-600/40 disabled:cursor-wait disabled:opacity-60"
+            aria-label={syncing ? 'Buscando novas transações' : 'Atualizar transações do banco'}
+          >
+            <RefreshCw size={16} aria-hidden="true" className={syncing ? 'animate-spin' : ''} />
+            {syncing ? 'Buscando…' : 'Atualizar'}
+          </button>
           <button onClick={handleExportCsv} className="btn-ghost">
             Exportar CSV
           </button>
@@ -491,6 +541,19 @@ export default function Transacoes() {
             + Nova transação
           </button>
         </div>
+      </div>
+
+      <div aria-live="polite">
+        {syncMessage && (
+          <p className="text-sm text-accent-soft-ink bg-accent-soft rounded-xl px-4 py-3 border border-brand-600/15">
+            {syncMessage}
+          </p>
+        )}
+        {syncError && (
+          <p role="alert" className="text-sm text-red-600 bg-red-50 rounded-xl px-4 py-3 border border-red-200">
+            {syncError}
+          </p>
+        )}
       </div>
 
       {actionError && (

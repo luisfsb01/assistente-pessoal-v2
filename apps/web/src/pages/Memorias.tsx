@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { apiFetch } from '../lib/api'
 import { Modal } from '../components/Modal'
+import { escapeLikePattern } from '../lib/postgrest'
 
 interface Memory {
   id: string
@@ -48,7 +49,7 @@ export default function Memorias() {
     if (subjectFilter !== 'all') q = q.eq('subject', subjectFilter)
     if (typeFilter !== 'all') q = q.eq('type', typeFilter)
     if (statusFilter !== 'all') q = q.eq('active', statusFilter === 'active')
-    if (query.trim()) q = q.ilike('content', `%${query.trim()}%`)
+    if (query.trim()) q = q.ilike('content', `%${escapeLikePattern(query.trim())}%`)
     const { data, error } = await q.order('updated_at', { ascending: false }).limit(limit + 1)
     if (error) { setError(error.message); setLoading(false); return }
     const rows = data as Memory[]

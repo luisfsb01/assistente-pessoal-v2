@@ -3,18 +3,33 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useSession } from '../lib/useSession'
 
-const navLinks = [
-  { to: '/',              label: 'Painel',        icon: '📊', end: true  },
-  { to: '/tarefas',       label: 'Tarefas',        icon: '✅', end: false },
-  { to: '/compras',       label: 'Compras',        icon: '🛒', end: false },
-  { to: '/habitos',       label: 'Hábitos',        icon: '🔁', end: false },
-  { to: '/projetos',      label: 'Projetos',       icon: '📁', end: false },
-  { to: '/memorias',      label: 'Memórias',       icon: '🧠', end: false },
-  { to: '/transacoes',    label: 'Transações',     icon: '💸', end: false },
-  { to: '/categorias',    label: 'Categorias',     icon: '🏷', end: false },
-  { to: '/objetivos',     label: 'Objetivos',      icon: '🎯', end: false },
-  { to: '/compromissos',  label: 'Compromissos',   icon: '💳', end: false },
-  { to: '/configuracoes', label: 'Configurações',  icon: '⚙️', end: false },
+type NavItem = { to: string; label: string; icon: string; end: boolean }
+
+export const navSections: Array<{ title: string; links: NavItem[] }> = [
+  {
+    title: 'Finanças',
+    links: [
+      { to: '/',             label: 'Painel',       icon: '📊', end: true  },
+      { to: '/transacoes',   label: 'Transações',   icon: '💸', end: false },
+      { to: '/categorias',   label: 'Categorias',   icon: '🏷', end: false },
+      { to: '/objetivos',    label: 'Objetivos',    icon: '🎯', end: false },
+      { to: '/compromissos', label: 'Compromissos', icon: '💳', end: false },
+    ],
+  },
+  {
+    title: 'Produtividade',
+    links: [
+      { to: '/habitos',  label: 'Hábitos',  icon: '🔁', end: false },
+      { to: '/projetos', label: 'Projetos', icon: '📁', end: false },
+      { to: '/compras',  label: 'Compras',  icon: '🛒', end: false },
+      { to: '/tarefas',  label: 'Tarefas',  icon: '✅', end: false },
+    ],
+  },
+]
+
+const utilityLinks: NavItem[] = [
+  { to: '/memorias',      label: 'Memórias',      icon: '🧠', end: false },
+  { to: '/configuracoes', label: 'Configurações', icon: '⚙️', end: false },
 ]
 
 function navClass({ isActive }: { isActive: boolean }) {
@@ -141,19 +156,49 @@ export default function Layout() {
             </div>
 
             {/* Nav */}
-            <nav className="flex flex-col gap-1.5 flex-1">
-              {navLinks.map((link) => (
-                <NavLink
-                  key={link.to}
-                  to={link.to}
-                  end={link.end}
-                  className={navClass}
-                  onClick={handleNavClick}
-                >
-                  <span className="text-lg leading-none">{link.icon}</span>
-                  {link.label}
-                </NavLink>
-              ))}
+            <nav className="flex flex-col gap-5 flex-1" aria-label="Navegação principal">
+              {navSections.map((section) => {
+                const headingId = `nav-${section.title.toLowerCase()}`
+                return (
+                  <section key={section.title} aria-labelledby={headingId}>
+                    <h2
+                      id={headingId}
+                      className="mb-1.5 px-3 text-[0.68rem] font-bold uppercase tracking-[0.16em] text-muted/80"
+                    >
+                      {section.title}
+                    </h2>
+                    <div className="flex flex-col gap-1">
+                      {section.links.map((link) => (
+                        <NavLink
+                          key={link.to}
+                          to={link.to}
+                          end={link.end}
+                          className={navClass}
+                          onClick={handleNavClick}
+                        >
+                          <span className="text-lg leading-none" aria-hidden="true">{link.icon}</span>
+                          {link.label}
+                        </NavLink>
+                      ))}
+                    </div>
+                  </section>
+                )
+              })}
+
+              <div className="flex flex-col gap-1 border-t border-hairline pt-4">
+                {utilityLinks.map((link) => (
+                  <NavLink
+                    key={link.to}
+                    to={link.to}
+                    end={link.end}
+                    className={navClass}
+                    onClick={handleNavClick}
+                  >
+                    <span className="text-lg leading-none" aria-hidden="true">{link.icon}</span>
+                    {link.label}
+                  </NavLink>
+                ))}
+              </div>
             </nav>
 
             {/* Footer */}

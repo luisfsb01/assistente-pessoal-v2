@@ -1,4 +1,5 @@
 import { supabase } from './client.js';
+import { escapeLikePattern } from '../lib/postgrest.js';
 
 export type Project = { id: string; name: string; status: string | null; updatedAt: string };
 export type ProjectTask = {
@@ -39,7 +40,7 @@ export async function findProjectByName(userId: string, name: string): Promise<P
     .select(P_COLS)
     .eq('user_id', userId)
     .eq('active', true)
-    .ilike('name', `%${name}%`)
+    .ilike('name', `%${escapeLikePattern(name)}%`)
     .limit(1)
     .maybeSingle();
   if (error) throw error;

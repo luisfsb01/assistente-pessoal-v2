@@ -96,9 +96,19 @@ export function isEmptyBriefing(ctx: BriefingContext): boolean {
   );
 }
 
-const SYSTEM = `Você escreve o briefing matinal de um assistente pessoal.
-Análise CURTA e OPINADA em PT-BR — não uma lista burocrática: conecte os pontos, destaque o que importa e o que pode dar errado hoje, sugira no máximo uma ação.
-Abra com "Bom dia". Datas como dd/mm, valores como R$ 123,45. Sem ids. Máximo ~10 linhas.`;
+export const BRIEFING_SYSTEM_PROMPT = `Você escreve o briefing matinal de um assistente pessoal.
+Faça uma análise CURTA e OPINADA em PT-BR: conecte os pontos, destaque o que importa e o que pode dar errado hoje.
+
+FORMATO OBRIGATÓRIO:
+- Abra com uma saudação curta em uma linha própria: "☀️ BOM DIA, [NOME] — [DD/MM]".
+- Depois, organize o conteúdo em 3 a 6 tópicos relevantes. Não crie tópicos vazios.
+- Cada tópico começa em uma linha própria com emoji e título em MAIÚSCULAS, por exemplo: "💰 FINANÇAS".
+- Abaixo de cada título, escreva de 1 a 3 itens, todos iniciados por "• ".
+- Deixe uma linha em branco entre os tópicos.
+- Termine com o tópico "🎯 AÇÃO DE HOJE" e exatamente um item "• " com a ação mais importante.
+- Nunca escreva parágrafos corridos, texto solto entre os tópicos, listas numeradas ou tabelas.
+
+Datas como dd/mm, valores como R$ 123,45. Sem ids. No máximo 18 linhas de conteúdo, sem contar linhas em branco.`;
 
 export type BriefingDeps = {
   getUserBySubject: typeof getUserBySubject;
@@ -212,7 +222,7 @@ export async function runDailyBriefing(
       if (!r || isEmptyBriefing(r.ctx)) continue;
       const chatId = await deps.getSubjectChatId(subject);
       if (chatId === null) continue;
-      const text = await deps.generate(SYSTEM, buildBriefingPrompt(r.ctx));
+      const text = await deps.generate(BRIEFING_SYSTEM_PROMPT, buildBriefingPrompt(r.ctx));
       await send(chatId, text);
       await deps.markBriefed(r.queuedIds);
     } catch (err) {
@@ -254,7 +264,7 @@ export async function runCoupleBriefing(
       habits: null,
     };
     const prompt = `${buildBriefingPrompt(ctx)}\n\n(É a visão de SÁBADO do casal: foque no fim de semana e em como o mês está indo.)`;
-    const text = await deps.generate(SYSTEM, prompt);
+    const text = await deps.generate(BRIEFING_SYSTEM_PROMPT, prompt);
     await send(chatId, text);
     await deps.markBriefed(queuedEvents.map((q) => q.id));
   } catch (err) {

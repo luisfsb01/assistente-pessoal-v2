@@ -9,8 +9,12 @@ const luis: ChatIdentity = { chatId: 1, kind: 'private', userName: 'Luis', subje
 function makeDeps(identity: ChatIdentity | null) {
   const saved: { chatId: number; role: ChatRole; content: string }[] = [];
   const buildToolsCalls: ChatIdentity[] = [];
+  const identityCalls: Array<[number, number | undefined]> = [];
   const deps: AgentDeps = {
-    getChatIdentity: async () => identity,
+    getChatIdentity: async (chatId, senderId) => {
+      identityCalls.push([chatId, senderId]);
+      return identity;
+    },
     saveMessage: async (m) => {
       saved.push(m);
     },
@@ -27,7 +31,7 @@ function makeDeps(identity: ChatIdentity | null) {
       return {};
     },
   };
-  return { deps, saved, buildToolsCalls };
+  return { deps, saved, buildToolsCalls, identityCalls };
 }
 
 describe('handleMessage', () => {
@@ -46,9 +50,86 @@ describe('handleMessage', () => {
     ]);
   });
 
+  it('não chama o modelo e pergunta a frequência quando a recorrência foi mencionada sem frequência', async () => {
+    const { deps, saved } = makeDeps(luis);
+    let generated = false;
+    deps.getRecentMessages = async () => [];
+    deps.generate = async () => {
+      generated = true;
+      return 'não deveria executar';
+    };
+
+    const reply = await handleMessage(
+      { chatId: 1, text: 'Crie uma tarefa recorrente para revisar o orçamento' },
+      deps,
+    );
+
+    expect(generated).toBe(false);
+    expect(reply).toBe('Qual é a frequência da tarefa recorrente?');
+    expect(saved.at(-1)).toEqual({
+      chatId: 1,
+      role: 'assistant',
+      content: 'Qual é a frequência da tarefa recorrente?',
+    });
+  });
+
+  it('pergunta obrigatoriamente a data final depois de receber a frequência', async () => {
+    const { deps } = makeDeps(luis);
+    let generated = false;
+    deps.getRecentMessages = async () => [
+      { role: 'user', content: 'Crie uma tarefa recorrente para revisar o orçamento' },
+      { role: 'assistant', content: 'Qual é a frequência da tarefa recorrente?' },
+    ];
+    deps.generate = async () => {
+      generated = true;
+      return 'não deveria executar';
+    };
+
+    const reply = await handleMessage({ chatId: 1, text: 'Toda semana' }, deps);
+
+    expect(generated).toBe(false);
+    expect(reply).toBe('Até qual data devo manter essa tarefa recorrente?');
+  });
+
+  it('só libera o modelo depois que frequência e data final foram informadas', async () => {
+    const { deps } = makeDeps(luis);
+    const contexts: Parameters<AgentDeps['buildTools']>[1][] = [];
+    deps.getRecentMessages = async () => [
+      { role: 'user', content: 'Crie uma tarefa recorrente para revisar o orçamento' },
+      { role: 'assistant', content: 'Qual é a frequência da tarefa recorrente?' },
+      { role: 'user', content: 'Toda semana' },
+      { role: 'assistant', content: 'Até qual data devo manter essa tarefa recorrente?' },
+    ];
+    deps.buildTools = (_identity, context) => {
+      contexts.push(context);
+      return {};
+    };
+    deps.generate = async () => 'Tarefa criada.';
+
+    const reply = await handleMessage({ chatId: 1, text: 'Até 31/12/2026' }, deps);
+
+    expect(reply).toBe('Tarefa criada.');
+    expect(contexts).toEqual([
+      {
+        taskRecurrence: {
+          explicit: true,
+          frequencyProvided: true,
+          untilDateProvided: true,
+        },
+        calendarExplicit: false,
+      },
+    ]);
+  });
+
   it('chama buildTools com a identidade resolvida do chat', async () => {
     const { deps, buildToolsCalls } = makeDeps(luis);
     await handleMessage({ chatId: 1, text: 'qual meu nome?' }, deps);
     expect(buildToolsCalls).toEqual([luis]);
+  });
+
+  it('encaminha o senderId para validar o remetente do grupo', async () => {
+    const { deps, identityCalls } = makeDeps(luis);
+    await handleMessage({ chatId: 1, senderId: 42, text: 'qual meu nome?' }, deps);
+    expect(identityCalls).toEqual([[1, 42]]);
   });
 });

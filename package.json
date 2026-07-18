@@ -11,7 +11,8 @@
     "typecheck": "npm run typecheck -w apps/server",
     "test": "vitest run",
     "job:reflect": "npm run job:reflect -w apps/server",
-    "web:dev": "npm run dev -w apps/web",
+    "web:dev": "tsx scripts/run-web-dev.ts",
+    "web-api:dev": "npm run web-api:dev -w apps/server",
     "web:build": "npm run build -w apps/web",
     "google:calendars": "npm run google:calendars -w apps/server"
   },

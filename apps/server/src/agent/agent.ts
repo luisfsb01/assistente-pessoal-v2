@@ -15,20 +15,39 @@ import { buildKnowledgeTools } from '../tools/knowledge.js';
 import { buildHabitTools } from '../tools/habits.js';
 import { buildProjectTools } from '../tools/projects.js';
 import { buildCalendarTools, calendarApiFromGoogle } from '../tools/calendar.js';
-import { generateAgentText } from './models.js';
+import { generateAgentText, shouldUseStrongChatModel } from './models.js';
 import { buildSystemPrompt, subjectsForChat } from './prompts.js';
+import { canAccess } from './capabilities.js';
+import {
+  nextTaskRecurrenceQuestion,
+  taskRecurrenceFlow,
+  type TaskRecurrenceFlow,
+} from './task-recurrence-flow.js';
+import { calendarToolIntent } from './calendar-tool-intent.js';
+
+export type AgentToolContext = {
+  taskRecurrence: TaskRecurrenceFlow;
+  calendarExplicit: boolean;
+};
 
 export type AgentDeps = {
-  getChatIdentity: (chatId: number) => Promise<ChatIdentity | null>;
+  getChatIdentity: (chatId: number, senderId?: number) => Promise<ChatIdentity | null>;
   saveMessage: (m: { chatId: number; role: ChatRole; content: string }) => Promise<void>;
   getRecentMessages: (chatId: number, limit?: number) => Promise<{ role: ChatRole; content: string }[]>;
   recall: (text: string, subjects: MemorySubject[]) => Promise<Memory[]>;
   generate: typeof generateAgentText;
-  buildTools: (identity: ChatIdentity) => ToolSet;
+  buildTools: (identity: ChatIdentity, context?: AgentToolContext) => ToolSet;
   onBudgetAlert?: (status: BudgetStatus, monthCostBrl: number) => Promise<void>;
 };
 
-function saveMemoryTool(): ToolSet {
+function saveMemoryTool(identity: ChatIdentity): ToolSet {
+  const allowedSubjects = new Set(
+    identity.kind === 'group'
+      ? ['casal']
+      : identity.subject === 'luis'
+        ? ['luis', 'casal']
+        : ['esposa', 'casal'],
+  );
   return {
     save_memory: tool({
       description:
@@ -39,6 +58,9 @@ function saveMemoryTool(): ToolSet {
         content: z.string().describe('O fato, em uma frase autossuficiente em PT-BR'),
       }),
       execute: async ({ subject, type, content }) => {
+        if (!allowedSubjects.has(subject)) {
+          return 'Não autorizado a salvar memória privada de outra pessoa neste chat.';
+        }
         await insertMemory({ subject, type, content, embedding: await embedText(content), source: 'tool' });
         return 'Memória salva.';
       },
@@ -46,17 +68,23 @@ function saveMemoryTool(): ToolSet {
   };
 }
 
-export function buildTools(identity: ChatIdentity): ToolSet {
+export function buildTools(identity: ChatIdentity, context?: AgentToolContext): ToolSet {
   const cfg = getConfig();
   return {
-    ...saveMemoryTool(),
-    ...buildTaskTools(identity),
-    ...buildShoppingTools(identity),
-    ...buildFinanceTools(),
-    ...buildKnowledgeTools(),
-    ...buildHabitTools(identity),
-    ...buildProjectTools(identity),
-    ...(hasGoogleCreds(cfg)
+    ...(canAccess(identity, 'memory') ? saveMemoryTool(identity) : {}),
+    ...(canAccess(identity, 'tasks')
+      ? buildTaskTools(identity, undefined, context?.taskRecurrence)
+      : {}),
+    ...(canAccess(identity, 'shopping') ? buildShoppingTools(identity) : {}),
+    ...(canAccess(identity, 'finance') ? buildFinanceTools() : {}),
+    ...(canAccess(identity, 'knowledge') ? buildKnowledgeTools() : {}),
+    ...(canAccess(identity, 'habits') && !context?.taskRecurrence.explicit
+      ? buildHabitTools(identity)
+      : {}),
+    ...(canAccess(identity, 'projects') ? buildProjectTools(identity) : {}),
+    ...(canAccess(identity, 'calendar') &&
+    hasGoogleCreds(cfg) &&
+    context?.calendarExplicit === true
       ? buildCalendarTools(identity, {
           getUserBySubject,
           calendar: calendarApiFromGoogle(getCalendarClient(cfg), cfg.TIMEZONE),
@@ -81,10 +109,10 @@ export function defaultAgentDeps(
 }
 
 export async function handleMessage(
-  msg: { chatId: number; text: string },
+  msg: { chatId: number; senderId?: number; text: string },
   deps: AgentDeps = defaultAgentDeps(),
 ): Promise<string | null> {
-  const identity = await deps.getChatIdentity(msg.chatId);
+  const identity = await deps.getChatIdentity(msg.chatId, msg.senderId);
   if (!identity) return null;
 
   await deps.saveMessage({ chatId: msg.chatId, role: 'user', content: msg.text });
@@ -94,23 +122,33 @@ export async function handleMessage(
     deps.recall(msg.text, subjectsForChat(identity)),
   ]);
 
+  // histórico já inclui a mensagem recém-salva em produção; em fakes pode não incluir —
+  // garante que a última mensagem é a atual sem duplicar
+  const past = history.filter((_, i) => i < history.length - 1 || history.at(-1)?.content !== msg.text);
+  const messages = [...past, { role: 'user' as const, content: msg.text }];
+  const recurrenceFlow = taskRecurrenceFlow(messages);
+  const recurrenceQuestion = nextTaskRecurrenceQuestion(recurrenceFlow);
+  if (recurrenceQuestion) {
+    await deps.saveMessage({ chatId: msg.chatId, role: 'assistant', content: recurrenceQuestion });
+    return recurrenceQuestion;
+  }
+
   const cfg = getConfig();
+  const calendarExplicit = calendarToolIntent(messages);
   const system = buildSystemPrompt({
     identity,
     memories,
     now: new Date(),
     timezone: cfg.TIMEZONE,
-    hasCalendar: hasGoogleCreds(cfg),
+    hasCalendar: hasGoogleCreds(cfg) && calendarExplicit,
   });
 
-  // histórico já inclui a mensagem recém-salva em produção; em fakes pode não incluir —
-  // garante que a última mensagem é a atual sem duplicar
-  const past = history.filter((_, i) => i < history.length - 1 || history.at(-1)?.content !== msg.text);
   const reply = await deps.generate({
     purpose: 'chat',
     system,
-    messages: [...past, { role: 'user', content: msg.text }],
-    tools: deps.buildTools(identity),
+    messages,
+    tools: deps.buildTools(identity, { taskRecurrence: recurrenceFlow, calendarExplicit }),
+    preferStrong: shouldUseStrongChatModel(msg.text),
     onBudgetAlert: deps.onBudgetAlert,
   });
 

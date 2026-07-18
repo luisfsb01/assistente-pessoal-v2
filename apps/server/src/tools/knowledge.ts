@@ -37,8 +37,8 @@ export function buildKnowledgeTools(deps: KnowledgeToolDeps = defaultDeps): Tool
       description:
         'Salva um link (artigo, vídeo do YouTube, podcast etc.) no segundo cérebro do casal. Use quando o usuário mandar uma URL pedindo para salvar/guardar. A nota opcional é o comentário do usuário sobre o conteúdo.',
       inputSchema: z.object({
-        url: z.string().url(),
-        note: z.string().optional().describe('Comentário do usuário sobre o link, se houver'),
+        url: z.string().url().refine((raw) => ['http:', 'https:'].includes(new URL(raw).protocol), 'Use HTTP/HTTPS'),
+        note: z.string().max(2_000).optional().describe('Comentário do usuário sobre o link, se houver'),
       }),
       execute: async ({ url, note }) => {
         try {

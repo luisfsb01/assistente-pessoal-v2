@@ -1,6 +1,13 @@
 import '../test-setup.js';
 import { describe, expect, it } from 'vitest';
-import { buildBriefingPrompt, isEmptyBriefing, runDailyBriefing, type BriefingContext, type BriefingDeps } from './briefing.js';
+import {
+  BRIEFING_SYSTEM_PROMPT,
+  buildBriefingPrompt,
+  isEmptyBriefing,
+  runDailyBriefing,
+  type BriefingContext,
+  type BriefingDeps,
+} from './briefing.js';
 
 const baseCtx: BriefingContext = {
   name: 'Luis',
@@ -50,6 +57,17 @@ describe('buildBriefingPrompt', () => {
     expect(p).toContain('Semana passada');
     expect(p).toContain('parabenize');
     expect(buildBriefingPrompt(baseCtx)).not.toContain('Semana passada');
+  });
+});
+
+describe('formato do briefing', () => {
+  it('exige tópicos destacados com emoji, bullets e uma única ação final', () => {
+    expect(BRIEFING_SYSTEM_PROMPT).toContain('FORMATO OBRIGATÓRIO');
+    expect(BRIEFING_SYSTEM_PROMPT).toContain('emoji e título em MAIÚSCULAS');
+    expect(BRIEFING_SYSTEM_PROMPT).toContain('todos iniciados por "• "');
+    expect(BRIEFING_SYSTEM_PROMPT).toContain('🎯 AÇÃO DE HOJE');
+    expect(BRIEFING_SYSTEM_PROMPT).toContain('exatamente um item');
+    expect(BRIEFING_SYSTEM_PROMPT).toContain('Nunca escreva parágrafos corridos');
   });
 });
 

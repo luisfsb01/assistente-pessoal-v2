@@ -34,4 +34,18 @@ describe('loadConfig', () => {
     const cfg = loadConfig(minimal as NodeJS.ProcessEnv);
     expect(cfg.GOOGLE_CLIENT_ID).toBeUndefined();
   });
+
+  it('aceita endpoint LLM compatível e trata string vazia como ausente', () => {
+    const cfg = loadConfig({
+      ...minimal,
+      LLM_API_KEY: 'outra-chave',
+      LLM_BASE_URL: 'https://openrouter.ai/api/v1',
+    } as NodeJS.ProcessEnv);
+    expect(cfg.LLM_API_KEY).toBe('outra-chave');
+    expect(cfg.LLM_BASE_URL).toBe('https://openrouter.ai/api/v1');
+
+    const empty = loadConfig({ ...minimal, LLM_API_KEY: '', LLM_BASE_URL: '' } as NodeJS.ProcessEnv);
+    expect(empty.LLM_API_KEY).toBeUndefined();
+    expect(empty.LLM_BASE_URL).toBeUndefined();
+  });
 });

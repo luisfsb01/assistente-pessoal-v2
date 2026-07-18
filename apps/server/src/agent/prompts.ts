@@ -1,8 +1,9 @@
 import type { ChatIdentity } from '../db/chats.js';
 import type { Memory, MemorySubject } from '../db/memories.js';
+import { capabilitiesForChat } from './capabilities.js';
 
 export function subjectsForChat(identity: ChatIdentity): MemorySubject[] {
-  if (identity.kind === 'group') return ['luis', 'esposa', 'casal'];
+  if (identity.kind === 'group') return ['casal'];
   if (identity.subject === 'luis') return ['luis', 'casal'];
   return ['esposa', 'casal'];
 }
@@ -15,6 +16,7 @@ export function buildSystemPrompt(args: {
   hasCalendar: boolean;
 }): string {
   const { identity, memories, now, timezone, hasCalendar } = args;
+  const capabilities = capabilitiesForChat(identity);
   const dateStr = now.toLocaleString('pt-BR', { timeZone: timezone, dateStyle: 'full', timeStyle: 'short' });
 
   const who =
@@ -34,24 +36,57 @@ export function buildSystemPrompt(args: {
       ? 'No grupo, sempre que a pessoa não deixar claro de quem é a tarefa/evento/lista, especifique o owner (luis ou esposa) — pergunte se não estiver óbvio pelo contexto ou por quem está falando.'
       : 'No privado, o padrão é que tarefas e agenda são do dono do chat, salvo se a pessoa pedir explicitamente algo do outro.';
 
-  const agendaBullet = hasCalendar
-    ? `\n- Agenda: cada pessoa tem sua própria agenda do Google Calendar (tools calendar_list_events, calendar_create_event, calendar_update_event, calendar_delete_event). Resolva datas relativas ("amanhã", "sexta que vem", "semana que vem") usando a data atual acima antes de chamar as tools.`
-    : '';
+  const capabilityLines = [
+    capabilities.has('tasks')
+      ? `- Tarefas: cada pessoa tem sua própria lista de tarefas (tools tasks_list, tasks_add, tasks_complete, tasks_update). ${ownerNote}`
+      : '',
+    capabilities.has('calendar') && hasCalendar
+      ? `- Agenda: cada pessoa tem sua própria agenda do Google Calendar (tools calendar_list_events, calendar_create_event, calendar_update_event, calendar_delete_event). Resolva datas relativas usando a data atual acima.`
+      : '',
+    capabilities.has('shopping')
+      ? '- Lista de compras: uma lista única do casal (tools shopping_list, shopping_add, shopping_remove, shopping_clear).'
+      : '',
+    capabilities.has('finance')
+      ? '- Finanças: tools finance_add_transaction, finance_list_transactions, finance_month_summary, finance_list_categories, finance_create_category, finance_classify_transaction, finance_confirm_transaction, finance_add_commitment, finance_list_commitments, finance_remove_commitment.'
+      : '',
+    capabilities.has('knowledge')
+      ? '- Segundo cérebro: use knowledge_save para links pedidos e knowledge_search para conteúdo salvo; cite notas como [[nome]].'
+      : '',
+    capabilities.has('habits')
+      ? '- Hábitos: tools habit_define, habit_list, habit_checkin e habit_archive.'
+      : '',
+    capabilities.has('projects')
+      ? '- Projetos: tools project_create, project_note, project_set_status, project_overview, project_task_add, project_task_move, project_task_list e project_archive.'
+      : '',
+  ].filter(Boolean);
 
-  const capabilities = `
+  const toolRules = [
+    capabilities.has('tasks')
+      ? `- Para concluir uma tarefa, liste primeiro com tasks_list para obter o id correto.
+- Nunca pergunte se uma tarefa é recorrente quando a pessoa não mencionar recorrência.
+- Se a pessoa disser explicitamente que a tarefa é recorrente, colete apenas o que faltar, uma pergunta por vez: primeiro a frequência e depois a data até quando deve repetir. Não repita dados já informados.
+- Só use tasks_add para uma tarefa recorrente quando frequência e data final estiverem definidas; envie esses dados em recurrence.
+- Rotinas recorrentes e afazeres domésticos são tarefas, mesmo quando a pessoa informa um horário. Tarefas nunca vão para o calendário só por terem data, horário ou recorrência.
+- Só trate como agenda se a pessoa disser explicitamente evento, agenda, calendário ou compromisso. Nunca ofereça hábito ou calendário como alternativa para uma tarefa recorrente.`
+      : '',
+    capabilities.has('calendar') && hasCalendar
+      ? '- Para alterar ou excluir evento, liste primeiro com calendar_list_events; confirme antes de excluir. calendar_create_event não suporta recorrência: nunca crie um evento único e o descreva como recorrente.'
+      : '',
+    capabilities.has('shopping')
+      ? '- Para remover item, liste primeiro com shopping_list; confirme antes de shopping_clear.'
+      : '',
+    capabilities.has('finance')
+      ? '- Finanças: códigos curtos como A001 usam finance_classify_transaction; consulte finance_list_categories se necessário.'
+      : '',
+  ].filter(Boolean);
+
+  const capabilitiesBlock = `
 
 Capacidades:
-- Tarefas: cada pessoa tem sua própria lista de tarefas (tools tasks_list, tasks_add, tasks_complete, tasks_update). ${ownerNote}${agendaBullet}
-- Lista de compras: uma lista de compras única do casal (tools shopping_list, shopping_add, shopping_remove, shopping_clear) — mora no grupo, mas também está acessível nos chats privados.
-- Finanças (do casal): os gastos do banco entram sozinhos todo dia e passam por uma revisão diária no privado do Luis. Tools: finance_add_transaction (gasto/receita manual), finance_list_transactions, finance_month_summary (resumo do mês com gasto por categoria vs meta), finance_list_categories, finance_create_category, finance_classify_transaction, finance_confirm_transaction, finance_add_commitment, finance_list_commitments, finance_remove_commitment.
-- Segundo cérebro (do casal): quando o usuário mandar um link pedindo para salvar/guardar, use knowledge_save (com a nota/comentário dele, se houver) e responda com um resumo curto do que foi salvo. Para perguntas sobre conteúdo já salvo, use knowledge_search e cite as notas pelo nome entre [[colchetes duplos]].
-- Hábitos: individuais, com meta semanal (tools habit_define, habit_list, habit_checkin, habit_archive). Check-in automático às 21h com botões; a pessoa também registra por conversa ("fui na academia" → habit_checkin done=true; "hoje não deu" → done=false).
-- Projetos: registro por conversa (tools project_create, project_note, project_set_status, project_overview, project_task_add, project_task_move, project_task_list, project_archive). "No projeto X decidi Y" → project_note kind=decision; "status do X: ..." → project_set_status; quadro to do/doing/done com prazos. Projetos são referidos por NOME, nunca por id.
+${capabilityLines.join('\n')}
 
 Instruções para usar as tools:
-- Para concluir ou remover ${hasCalendar ? 'uma tarefa, um evento ou um item' : 'uma tarefa ou um item'}, primeiro liste (${hasCalendar ? 'tasks_list/calendar_list_events/shopping_list' : 'tasks_list/shopping_list'}) para conseguir o id correto — nunca invente um id. Se precisar do id de algo mencionado antes, chame a tool de listagem de novo em silêncio.
-- Antes de chamar ${hasCalendar ? 'shopping_clear ou calendar_delete_event' : 'shopping_clear'}, confirme com o usuário na conversa que é isso mesmo que ele quer, e só chame a tool depois da confirmação.
-- Finanças: quando o usuário citar um código curto de revisão (ex.: "A001 é mercado"), use finance_classify_transaction com esse código; a categoria precisa existir — se tiver dúvida, chame finance_list_categories em silêncio antes. Códigos curtos como A001 PODEM aparecer nas respostas (são feitos para o usuário); valores sempre como "R$ 123,45".
+${toolRules.join('\n')}
 
 Estilo das respostas (siga à risca):
 - NUNCA mostre ids/UUIDs ao usuário — eles são uso interno seu. Liste itens como lista numerada simples.
@@ -66,7 +101,7 @@ ${who}
 Agora é ${dateStr} (${timezone}).
 
 Regras:
-- Quando o usuário disser algo durável sobre si, preferências, hábitos, decisões ou pessoas ("sempre", "nunca", "prefiro", "decidi"), use a tool save_memory para registrar.
+- Quando o usuário disser algo durável sobre si, preferências, hábitos, decisões ou pessoas ("sempre", "nunca", "prefiro", "decidi"), use save_memory apenas para o sujeito permitido neste chat.
 - Se não tiver certeza do que a pessoa quis dizer, pergunte em vez de supor.
-- Não invente informações; se não sabe, diga que não sabe.${capabilities}${memoryBlock}`;
+- Não invente informações; se não sabe, diga que não sabe.${capabilitiesBlock}${memoryBlock}`;
 }

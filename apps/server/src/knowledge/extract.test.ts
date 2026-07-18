@@ -1,5 +1,31 @@
 import { describe, expect, it } from 'vitest';
-import { articleFromHtml, detectKind, extractFromUrl, type Fetcher } from './extract.js';
+import {
+  articleFromHtml,
+  assertPublicHttpUrl,
+  detectKind,
+  extractFromUrl,
+  isBlockedIp,
+  type Fetcher,
+} from './extract.js';
+
+describe('proteção SSRF', () => {
+  it('bloqueia loopback, redes privadas, link-local e IPv6 local', () => {
+    for (const ip of ['127.0.0.1', '10.1.2.3', '172.16.0.1', '192.168.1.1', '169.254.169.254', '::1', 'fd00::1']) {
+      expect(isBlockedIp(ip)).toBe(true);
+    }
+    expect(isBlockedIp('8.8.8.8')).toBe(false);
+    expect(isBlockedIp('2606:4700:4700::1111')).toBe(false);
+  });
+
+  it('aceita domínio público e rejeita resolução privada/porta incomum', async () => {
+    const publicDns = async () => [{ address: '93.184.216.34' }];
+    const privateDns = async () => [{ address: '10.0.0.5' }];
+    await expect(assertPublicHttpUrl('https://example.com/a', publicDns)).resolves.toBeInstanceOf(URL);
+    await expect(assertPublicHttpUrl('https://intranet.example/a', privateDns)).rejects.toThrow('privado');
+    await expect(assertPublicHttpUrl('http://example.com:8080/a', publicDns)).rejects.toThrow('Porta');
+    await expect(assertPublicHttpUrl('file:///etc/passwd', publicDns)).rejects.toThrow('HTTP');
+  });
+});
 
 const ARTICLE_HTML = `<!doctype html><html><head><title>Guia de Testes</title></head><body>
 <article><h1>Guia de Testes</h1>${'<p>Parágrafo com conteúdo relevante sobre testes de software e boas práticas de engenharia.</p>'.repeat(10)}</article>

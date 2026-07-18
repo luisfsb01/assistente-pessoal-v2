@@ -18,6 +18,9 @@ COPY package.json package-lock.json ./
 COPY apps/server/package.json apps/server/
 COPY apps/web/package.json apps/web/
 RUN npm ci --omit=dev
-COPY --from=build /app/apps/server/dist apps/server/dist
-COPY --from=build /app/apps/web/dist apps/web/dist
+COPY --from=build --chown=node:node /app/apps/server/dist apps/server/dist
+COPY --from=build --chown=node:node /app/apps/web/dist apps/web/dist
+USER node
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD ["node", "-e", "fetch('http://127.0.0.1:8080/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
 CMD ["node", "apps/server/dist/index.js"]

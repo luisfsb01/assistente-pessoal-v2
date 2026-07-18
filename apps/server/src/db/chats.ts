@@ -7,7 +7,7 @@ export type ChatIdentity = {
   subject: 'luis' | 'esposa' | null;
 };
 
-export async function getChatIdentity(chatId: number): Promise<ChatIdentity | null> {
+export async function getChatIdentity(chatId: number, senderId?: number): Promise<ChatIdentity | null> {
   const { data, error } = await supabase
     .from('chats')
     .select('id, kind, users ( name, subject )')
@@ -15,6 +15,18 @@ export async function getChatIdentity(chatId: number): Promise<ChatIdentity | nu
     .maybeSingle();
   if (error) throw error;
   if (!data) return null;
+  if (senderId !== undefined) {
+    if (data.kind === 'private' && Number(data.id) !== senderId) return null;
+    if (data.kind === 'group') {
+      const { data: sender, error: senderError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('telegram_chat_id', senderId)
+        .maybeSingle();
+      if (senderError) throw senderError;
+      if (!sender) return null;
+    }
+  }
   const user = Array.isArray(data.users) ? data.users[0] : data.users;
   return {
     chatId: Number(data.id),

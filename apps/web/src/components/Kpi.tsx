@@ -11,12 +11,12 @@ export default function Kpi({ label, value, variationPct, hero = false }: KpiPro
   const cardClass = hero ? 'card-hero' : 'card'
   const labelClass = hero ? 'text-sm text-white/70' : 'text-sm text-muted'
   const valueClass = [
-    'mt-2 text-2xl 2xl:text-3xl font-bold tracking-tight tabular-nums whitespace-nowrap',
+    'mt-2 text-[clamp(1.15rem,1.65vw,1.75rem)] font-bold tracking-tight tabular-nums whitespace-nowrap',
     hero ? 'text-white' : '',
   ].join(' ')
 
   return (
-    <div className={`${cardClass} overflow-hidden`}>
+    <div className={`${cardClass} min-w-0 overflow-hidden`}>
       <p className={labelClass}>{label}</p>
       <p className={valueClass}>{formatBrl(value)}</p>
       {variationPct !== undefined && (

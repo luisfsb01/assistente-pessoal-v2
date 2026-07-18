@@ -11,8 +11,8 @@ describe('subjectsForChat', () => {
     expect(subjectsForChat(luis)).toEqual(['luis', 'casal']));
   it('privado da esposa vê esposa + casal', () =>
     expect(subjectsForChat(esposa)).toEqual(['esposa', 'casal']));
-  it('grupo vê tudo', () =>
-    expect(subjectsForChat(grupo)).toEqual(['luis', 'esposa', 'casal']));
+  it('grupo vê apenas memórias compartilhadas do casal', () =>
+    expect(subjectsForChat(grupo)).toEqual(['casal']));
 });
 
 describe('buildSystemPrompt', () => {
@@ -73,5 +73,24 @@ describe('buildSystemPrompt', () => {
   it('instrui sobre códigos de revisão e classificação', () => {
     const p = buildSystemPrompt(args).toLowerCase();
     expect(p).toContain('a001');
+  });
+
+  it('só conduz o fluxo de recorrência quando o usuário mencionar', () => {
+    const p = buildSystemPrompt(args).toLowerCase();
+    expect(p).toContain('nunca pergunte se uma tarefa é recorrente');
+    expect(p).toContain('primeiro a frequência e depois a data até quando');
+    expect(p).toContain('só use tasks_add para uma tarefa recorrente');
+    expect(p).toContain('afazeres domésticos são tarefas');
+    expect(p).toContain('mesmo quando a pessoa informa um horário');
+    expect(p).toContain('nunca crie um evento único e o descreva como recorrente');
+  });
+
+  it('não expõe finanças nem segundo cérebro no privado da esposa ou no grupo', () => {
+    const wifePrompt = buildSystemPrompt({ ...args, identity: esposa, memories: [] }).toLowerCase();
+    const groupPrompt = buildSystemPrompt({ ...args, identity: grupo, memories: [] }).toLowerCase();
+    for (const prompt of [wifePrompt, groupPrompt]) {
+      expect(prompt).not.toContain('finance_month_summary');
+      expect(prompt).not.toContain('knowledge_save');
+    }
   });
 });

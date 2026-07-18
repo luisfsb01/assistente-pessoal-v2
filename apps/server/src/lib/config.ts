@@ -1,9 +1,14 @@
 import { dirname, join } from 'node:path';
 import { z } from 'zod';
 
+const optionalNonEmpty = z.preprocess((value) => value === '' ? undefined : value, z.string().min(1).optional());
+const optionalUrl = z.preprocess((value) => value === '' ? undefined : value, z.string().url().optional());
+
 const schema = z.object({
   TELEGRAM_TOKEN: z.string().min(1),
   OPENAI_API_KEY: z.string().min(1),
+  LLM_API_KEY: optionalNonEmpty,
+  LLM_BASE_URL: optionalUrl,
   SUPABASE_URL: z.string().url(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
   MODEL_DEFAULT_ID: z.string().default('gpt-5-mini'),

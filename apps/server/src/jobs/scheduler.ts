@@ -13,6 +13,8 @@ import { runEmailCleanup } from './email-cleanup.js';
 import { runLibrarian } from './librarian.js';
 import { dueRoutines, getRoutinesConfig, type RoutineKey } from './routines.js';
 import { runDailyCheckin } from './daily-checkin.js';
+import { claimScheduledRun } from '../db/scheduled-runs.js';
+import { todayInTz } from '../lib/dates.js';
 
 export function startScheduler(bot: Bot): void {
   const cfg = getConfig();
@@ -56,10 +58,18 @@ export function startScheduler(bot: Bot): void {
   };
   cron.schedule('* * * * *', () => {
     const now = new Date();
+    const hhmm = localTimeHHMM(now, cfg.TIMEZONE);
+    const slot = `${todayInTz(cfg.TIMEZONE, now)}T${hhmm}`;
     getRoutinesConfig()
-      .then((rc) => {
-        const due = dueRoutines(localTimeHHMM(now, cfg.TIMEZONE), weekdayInTz(cfg.TIMEZONE, now), rc);
-        for (const key of due) routineJobs[key]().catch((err) => console.error(`[job:${key}]`, err));
+      .then(async (rc) => {
+        const due = dueRoutines(hhmm, weekdayInTz(cfg.TIMEZONE, now), rc);
+        for (const key of due) {
+          try {
+            if (await claimScheduledRun(key, slot)) await routineJobs[key]();
+          } catch (err) {
+            console.error(`[job:${key}]`, err);
+          }
+        }
       })
       .catch((err) => console.error('[scheduler:tick]', err));
   }, opts);

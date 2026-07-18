@@ -162,10 +162,13 @@ validada no VPS.
    Management API).
 2. **Pasta do vault no VPS** (terminal do navegador da Hostinger):
    ```bash
-   mkdir -p /root/assistente-vault
+   install -d -o 1000 -g 1000 /root/assistente-vault
    ```
    O deploy monta essa pasta dentro do container como `/vault`
    (variável `VAULT_PATH`). Nada a configurar no `.env` do VPS.
+   Se a pasta já existia e foi criada pelo container antigo (root), rode uma vez:
+   `chown -R 1000:1000 /root/assistente-vault`. A imagem agora executa como
+   usuário não-root.
 3. **Testar a captura**: mandar um link de artigo no chat do bot pedindo para
    salvar → a nota aparece em `/root/assistente-vault/Sources/`. O
    bibliotecário roda às 04:00 (ou `npm run job:librarian -w apps/server`).
@@ -242,6 +245,47 @@ validada no VPS.
    inteiro; excluir transação/categoria/objetivo abre modal (sem popups do
    navegador); no celular, nenhuma página rola na horizontal (a tabela rola
    dentro do próprio quadro).
+
+## 12. Hardening de segurança
+
+1. Executar `supabase/migrations/0009_security_hardening.sql`. A migração:
+   - cadastra automaticamente em `app_members` apenas as contas Auth que já
+     existem;
+   - bloqueia futuras contas até autorização explícita;
+   - restringe RPCs internas e adiciona trava contra rotina duplicada.
+2. Depois da migração, confirme as contas autorizadas e remova qualquer conta
+   que não seja do casal:
+   ```sql
+   select au.email, am.created_at
+   from public.app_members am
+   join auth.users au on au.id = am.auth_user_id;
+   ```
+3. Confirme que o casal continua conseguindo entrar no painel. Para autorizar
+   uma conta criada futuramente, execute no SQL Editor:
+   ```sql
+   insert into public.app_members (auth_user_id)
+   select id from auth.users where email = 'EMAIL_DA_CONTA'
+   on conflict do nothing;
+   ```
+4. Em Authentication → Sign In / Up, manter novos cadastros públicos
+   desabilitados. A tabela `app_members` é uma segunda barreira, não substitui
+   essa configuração.
+5. O container agora roda sem root. Antes do primeiro deploy desta versão,
+   ajuste o vault conforme a seção 8 (`chown -R 1000:1000`).
+
+## 13. Histórico de prazo das tarefas
+
+1. Execute `supabase/migrations/0010_tasks_deadline_history.sql` no SQL Editor.
+2. A migração preenche o prazo inicial das tarefas existentes e passa a
+   preservá-lo quando o prazo atual for alterado ou removido.
+
+## 14. Tarefas recorrentes
+
+1. Depois da migração 0010, execute
+   `supabase/migrations/0011_recurring_tasks.sql` no SQL Editor.
+2. A recorrência mantém apenas a ocorrência atual na tabela. Ao concluir essa
+   tarefa, o banco cria de forma idempotente a próxima ocorrência, respeitando
+   a frequência e a data final configuradas.
 
 ## Notas
 
