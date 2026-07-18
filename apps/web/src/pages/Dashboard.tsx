@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { type PeriodKey, PERIOD_LABELS, periodRange, previousRange, yearRange } from '../lib/period'
-import { kpis, variation, monthlyCashflow, spendingByRootCategory, topSubcategories, subcategoriesOfRoot, withAccumulatedBalance, isCounted } from '../lib/finance-data'
+import { type PeriodKey, PERIOD_LABELS, periodRange, previousRange } from '../lib/period'
+import { kpis, variation, spendingByRootCategory, topSubcategories, subcategoriesOfRoot, withAccumulatedBalance, isCounted } from '../lib/finance-data'
 import { useFinance } from '../lib/useFinance'
+import { useYearCashflow } from '../lib/useYearCashflow'
 import Kpi from '../components/Kpi'
 import IncomeExpenseChart from '../components/IncomeExpenseChart'
 import CategoryVsTargetChart from '../components/CategoryVsTargetChart'
@@ -17,16 +18,15 @@ export default function Dashboard() {
 
   const curr = useFinance(range)
   const prevData = useFinance(prev)
-  const yearData = useFinance(yearRange())
+  const yearFlow = useYearCashflow(new Date().getFullYear())
+  const yearBalance = yearFlow.flow.reduce((s, f) => s + f.income - f.expense - f.invested, 0)
 
   // Exclui categorias marcadas counts=false dos KPIs e do fluxo de caixa.
   const countedCurr = curr.txs.filter((t) => isCounted(t.category_id, curr.categories))
   const countedPrev = prevData.txs.filter((t) => isCounted(t.category_id, prevData.categories))
-  const countedYear = yearData.txs.filter((t) => isCounted(t.category_id, yearData.categories))
 
   const k = kpis(countedCurr, curr.categories)
   const kp = kpis(countedPrev, prevData.categories)
-  const yearKpis = kpis(countedYear, yearData.categories)
 
   return (
     <div>
@@ -85,7 +85,7 @@ export default function Dashboard() {
           />
           <Kpi
             label="Saldo no ano"
-            value={yearKpis.balance}
+            value={yearBalance}
           />
         </div>
       )}
@@ -95,12 +95,12 @@ export default function Dashboard() {
         <>
           {/* Receitas x Despesas — full width */}
           <div className="mt-5">
-            {yearData.loading ? (
+            {yearFlow.loading ? (
               <div className="card animate-pulse h-96" />
+            ) : yearFlow.error ? (
+              <div className="card text-red-600">{yearFlow.error}</div>
             ) : (
-              <IncomeExpenseChart
-                data={withAccumulatedBalance(monthlyCashflow(countedYear, new Date().getFullYear(), yearData.categories))}
-              />
+              <IncomeExpenseChart data={withAccumulatedBalance(yearFlow.flow)} />
             )}
           </div>
 
