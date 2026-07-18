@@ -21,7 +21,7 @@ export const navSections: Array<{ title: string; links: NavItem[] }> = [
     links: [
       { to: '/habitos',  label: 'Hábitos',  icon: '🔁', end: false },
       { to: '/projetos', label: 'Projetos', icon: '📁', end: false },
-      { to: '/compras',  label: 'Compras',  icon: '🛒', end: false },
+      { to: '/listas',   label: 'Listas',   icon: '📋', end: false },
       { to: '/tarefas',  label: 'Tarefas',  icon: '✅', end: false },
     ],
   },

@@ -172,6 +172,9 @@ validada no VPS.
 3. **Testar a captura**: mandar um link de artigo no chat do bot pedindo para
    salvar → a nota aparece em `/root/assistente-vault/Sources/`. O
    bibliotecário roda às 04:00 (ou `npm run job:librarian -w apps/server`).
+   No privado do Luis, arquivos `.md`, `.markdown`, `.txt`, `.pdf` e `.docx` de
+   até 10 MB também são salvos automaticamente em `Sources/` assim que forem
+   enviados ao bot. PDFs escaneados somente como imagem precisam de OCR prévio.
 4. **Syncthing** (espelha o vault no PC e no celular — passo a passo leigo):
 
    *O que é:* um programa que mantém a MESMA pasta igualzinha em vários

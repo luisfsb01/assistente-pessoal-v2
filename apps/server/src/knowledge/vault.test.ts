@@ -60,6 +60,14 @@ describe('buildSourceMarkdown', () => {
   it('sem nota, sem linha note', () => {
     expect(buildSourceMarkdown(nota())).not.toContain('note:');
   });
+  it('documento usa nome original e não inventa URL', () => {
+    const md = buildSourceMarkdown(
+      nota({ url: undefined, sourceFile: 'guia.md', origem: 'document' }),
+    );
+    expect(md).toContain('arquivo_original: "guia.md"');
+    expect(md).toContain('origem: document');
+    expect(md).not.toContain('\nurl:');
+  });
 });
 
 describe('writeSourceNote', () => {

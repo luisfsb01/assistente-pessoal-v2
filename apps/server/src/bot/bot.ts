@@ -1,8 +1,13 @@
 import { Bot } from 'grammy';
+import {
+  MAX_KNOWLEDGE_DOCUMENT_BYTES,
+  type IncomingKnowledgeDocument,
+} from '../knowledge/document.js';
 import { confirmTransaction, getTransactionById, learnRule } from '../db/finance.js';
 import { getChatIdentity, getUserBySubject } from '../db/chats.js';
 import { getHabitById } from '../db/habits.js';
 import { moveProjectTask } from '../db/projects.js';
+import { deleteTravelList } from '../db/lists.js';
 import { getConfig } from '../lib/config.js';
 import { todayInTz } from '../lib/dates.js';
 import { registerHabitAnswer, sendNextCheckinQuestion } from '../jobs/daily-checkin.js';
@@ -11,6 +16,7 @@ import { decodeAction } from './callback.js';
 export function createBot(
   token: string,
   handle: (msg: { chatId: number; senderId?: number; text: string }) => Promise<string | null>,
+  handleDocument: (msg: IncomingKnowledgeDocument) => Promise<string | null>,
 ): Bot {
   const bot = new Bot(token);
 
@@ -70,6 +76,30 @@ export function createBot(
         return;
       }
 
+      if (action.kind === 'travel') {
+        if (identity.kind !== 'group') {
+          await ctx.answerCallbackQuery({ text: 'Não autorizado.' });
+          return;
+        }
+        if (action.action === 'delete') {
+          const deleted = await deleteTravelList(action.listId);
+          await ctx.answerCallbackQuery({ text: deleted ? 'Lista apagada 🗑️' : 'Lista não encontrada' });
+          await ctx
+            .editMessageText(
+              deleted
+                ? `🗑️ ${ctx.callbackQuery.message?.text?.split('\n')[0] ?? 'Lista de viagem apagada'}`
+                : 'Essa lista de viagem já foi apagada.',
+            )
+            .catch(() => {});
+        } else {
+          await ctx.answerCallbackQuery({ text: 'Lista mantida 📌' });
+          await ctx
+            .editMessageText(`📌 ${ctx.callbackQuery.message?.text?.split('\n')[0] ?? 'Lista de viagem'} — mantida`)
+            .catch(() => {});
+        }
+        return;
+      }
+
       // ptask: tarefa de projeto vencida do check-in
       if (identity.kind !== 'private' || !identity.subject) {
         await ctx.answerCallbackQuery({ text: 'Não autorizado.' });
@@ -106,6 +136,37 @@ export function createBot(
     } catch (err) {
       console.error('[bot]', err);
       await ctx.reply('Tive um problema aqui do meu lado. Tenta de novo?').catch(() => {});
+    }
+  });
+
+  bot.on('message:document', async (ctx) => {
+    const document = ctx.message.document;
+    try {
+      await ctx.replyWithChatAction('typing');
+      const reply = await handleDocument({
+        chatId: ctx.chat.id,
+        senderId: ctx.from.id,
+        fileName: document.file_name,
+        mimeType: document.mime_type,
+        fileSize: document.file_size,
+        download: async () => {
+          const file = await ctx.api.getFile(document.file_id);
+          if (!file.file_path) throw new Error('Telegram não retornou o caminho do documento.');
+          const res = await fetch(`https://api.telegram.org/file/bot${token}/${file.file_path}`, {
+            signal: AbortSignal.timeout(15_000),
+          });
+          if (!res.ok) throw new Error(`Download do Telegram falhou: HTTP ${res.status}`);
+          const announced = Number(res.headers.get('content-length') ?? 0);
+          if (announced > MAX_KNOWLEDGE_DOCUMENT_BYTES) {
+            return new Uint8Array(MAX_KNOWLEDGE_DOCUMENT_BYTES + 1);
+          }
+          return new Uint8Array(await res.arrayBuffer());
+        },
+      });
+      if (reply) await ctx.reply(reply);
+    } catch (err) {
+      console.error('[bot:document]', err);
+      await ctx.reply('Não consegui baixar ou salvar esse arquivo. Tenta de novo?').catch(() => {});
     }
   });
 

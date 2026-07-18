@@ -15,6 +15,7 @@ import { dueRoutines, getRoutinesConfig, type RoutineKey } from './routines.js';
 import { runDailyCheckin } from './daily-checkin.js';
 import { claimScheduledRun } from '../db/scheduled-runs.js';
 import { todayInTz } from '../lib/dates.js';
+import { runTravelCleanup } from './travel-cleanup.js';
 
 export function startScheduler(bot: Bot): void {
   const cfg = getConfig();
@@ -32,6 +33,13 @@ export function startScheduler(bot: Bot): void {
   if (hasGoogleCreds(cfg)) cron.schedule('*/30 * * * *', cycle(['calendar'], 'calendar'), opts);
   if (isBankConfigured()) cron.schedule('0 */2 * * *', cycle(['finance'], 'finance'), opts);
   cron.schedule('30 6 * * *', cycle(['tasks', 'projects'], 'tasks+projects'), opts);
+
+  // Listas de viagem passadas: pergunta no grupo, uma vez por viagem, com confirmação por botão.
+  cron.schedule('0 9 * * *', () => {
+    runTravelCleanup((chatId, text, kb) =>
+      bot.api.sendMessage(chatId, text, kb ? { reply_markup: kb } : undefined).then(() => undefined),
+    ).catch((err) => console.error('[job:travel-cleanup]', err));
+  }, opts);
 
   // Limpeza do Gmail (Fase 5): 30 em 30 min; sem escopo gmail.modify o job só loga o erro
   if (hasGoogleCreds(cfg)) {
@@ -75,6 +83,6 @@ export function startScheduler(bot: Bot): void {
   }, opts);
 
   console.log(
-    `[scheduler] reflexão 03:00, bibliotecário 04:00, rotinas via routines_config (defaults 07:00, sáb 08:00, 08:00, 21:00), coletores: calendário ${hasGoogleCreds(cfg) ? '30min' : 'off'}, banco ${isBankConfigured() ? '2h' : 'off'}, tarefas+projetos 06:30, gmail ${hasGoogleCreds(cfg) ? '30min' : 'off'} — ${cfg.TIMEZONE}`,
+    `[scheduler] reflexão 03:00, bibliotecário 04:00, viagens passadas 09:00, rotinas via routines_config (defaults 07:00, sáb 08:00, 08:00, 21:00), coletores: calendário ${hasGoogleCreds(cfg) ? '30min' : 'off'}, banco ${isBankConfigured() ? '2h' : 'off'}, tarefas+projetos 06:30, gmail ${hasGoogleCreds(cfg) ? '30min' : 'off'} — ${cfg.TIMEZONE}`,
   );
 }

@@ -4,7 +4,7 @@ import Login from './pages/Login'
 import RedefinirSenha from './pages/RedefinirSenha'
 import Dashboard from './pages/Dashboard'
 import Tarefas from './pages/Tarefas'
-import Compras from './pages/Compras'
+import Listas from './pages/Listas'
 import Habitos from './pages/Habitos'
 import Projetos from './pages/Projetos'
 import ProjetoDetalhe from './pages/ProjetoDetalhe'
@@ -44,7 +44,8 @@ export default function App() {
       >
         <Route index element={<Dashboard />} />
         <Route path="/tarefas" element={<Tarefas />} />
-        <Route path="/compras" element={<Compras />} />
+        <Route path="/listas" element={<Listas />} />
+        <Route path="/compras" element={<Navigate to="/listas" replace />} />
         <Route path="/habitos" element={<Habitos />} />
         <Route path="/projetos" element={<Projetos />} />
         <Route path="/projetos/:id" element={<ProjetoDetalhe />} />

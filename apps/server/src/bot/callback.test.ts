@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decodeAction, encodeFinAction, encodeHabitAction, encodePtaskAction } from './callback.js';
+import { decodeAction, encodeFinAction, encodeHabitAction, encodePtaskAction, encodeTravelCleanupAction } from './callback.js';
 
 describe('callback codec', () => {
   it('roundtrip fin:ok', () => {
@@ -26,5 +26,12 @@ describe('callbacks de hábito e tarefa de projeto', () => {
   it('dados desconhecidos continuam null', () => {
     expect(decodeAction('hab:talvez:h1')).toBeNull();
     expect(decodeAction('ptask:zzz:t1')).toBeNull();
+  });
+});
+
+describe('callback de limpeza de viagem', () => {
+  it('codifica apagar e manter', () => {
+    expect(decodeAction(encodeTravelCleanupAction('delete', 'trip1'))).toEqual({ kind: 'travel', action: 'delete', listId: 'trip1' });
+    expect(decodeAction(encodeTravelCleanupAction('keep', 'trip1'))).toEqual({ kind: 'travel', action: 'keep', listId: 'trip1' });
   });
 });

@@ -4,13 +4,18 @@ import { supabase } from './db/client.js';
 import { getState, setState } from './db/state.js';
 import { defaultAgentDeps, handleMessage } from './agent/agent.js';
 import { createBot } from './bot/bot.js';
+import { saveKnowledgeDocument } from './knowledge/document.js';
 import { startScheduler } from './jobs/scheduler.js';
 import { startWebServer } from './api/server.js';
 
 async function main() {
   const cfg = getConfig();
 
-  const bot = createBot(cfg.TELEGRAM_TOKEN, (msg) => handleMessage(msg, agentDeps));
+  const bot = createBot(
+    cfg.TELEGRAM_TOKEN,
+    (msg) => handleMessage(msg, agentDeps),
+    (msg) => saveKnowledgeDocument(msg),
+  );
 
   const sendToLuis = async (text: string) => {
     const { data } = await supabase

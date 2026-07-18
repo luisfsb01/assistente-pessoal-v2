@@ -15,24 +15,26 @@ export async function getChatIdentity(chatId: number, senderId?: number): Promis
     .maybeSingle();
   if (error) throw error;
   if (!data) return null;
+  let groupSender: { name: string; subject: 'luis' | 'esposa' } | null = null;
   if (senderId !== undefined) {
     if (data.kind === 'private' && Number(data.id) !== senderId) return null;
     if (data.kind === 'group') {
       const { data: sender, error: senderError } = await supabase
         .from('users')
-        .select('id')
+        .select('name, subject')
         .eq('telegram_chat_id', senderId)
         .maybeSingle();
       if (senderError) throw senderError;
       if (!sender) return null;
+      groupSender = { name: sender.name, subject: sender.subject as 'luis' | 'esposa' };
     }
   }
   const user = Array.isArray(data.users) ? data.users[0] : data.users;
   return {
     chatId: Number(data.id),
     kind: data.kind as 'private' | 'group',
-    userName: user?.name ?? null,
-    subject: (user?.subject as 'luis' | 'esposa' | undefined) ?? null,
+    userName: groupSender?.name ?? user?.name ?? null,
+    subject: groupSender?.subject ?? (user?.subject as 'luis' | 'esposa' | undefined) ?? null,
   };
 }
 

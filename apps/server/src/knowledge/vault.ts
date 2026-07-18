@@ -2,11 +2,12 @@ import { access, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { getConfig } from '../lib/config.js';
 
-export type NoteOrigin = 'article' | 'youtube' | 'link';
+export type NoteOrigin = 'article' | 'youtube' | 'link' | 'document';
 
 export type SourceNote = {
   title: string;
-  url: string;
+  url?: string;
+  sourceFile?: string;
   origem: NoteOrigin;
   capturedAt: string; // ISO
   note?: string; // comentário do Luis na captura
@@ -42,7 +43,8 @@ export function buildSourceMarkdown(n: SourceNote): string {
   return [
     '---',
     `title: "${esc(n.title)}"`,
-    `url: "${esc(n.url)}"`,
+    ...(n.url ? [`url: "${esc(n.url)}"`] : []),
+    ...(n.sourceFile ? [`arquivo_original: "${esc(n.sourceFile)}"`] : []),
     `origem: ${n.origem}`,
     `captured_at: ${n.capturedAt}`,
     ...(n.note ? [`note: "${esc(n.note)}"`] : []),

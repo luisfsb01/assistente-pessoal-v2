@@ -75,6 +75,13 @@ describe('buildSystemPrompt', () => {
     expect(p).toContain('a001');
   });
 
+  it('orienta os fluxos de viagem e pedidos de oração', () => {
+    const p = buildSystemPrompt(args).toLowerCase();
+    expect(p).toContain('nome da viagem e a data são obrigatórios');
+    expect(p).toContain('pedido de oração sempre precisa do nome da pessoa e do pedido');
+    expect(p).toContain('nunca adicione, remova ou liste pelo bot os pedidos individuais do cônjuge');
+  });
+
   it('só conduz o fluxo de recorrência quando o usuário mencionar', () => {
     const p = buildSystemPrompt(args).toLowerCase();
     expect(p).toContain('nunca pergunte se uma tarefa é recorrente');

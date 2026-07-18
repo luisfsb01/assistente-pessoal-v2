@@ -30,4 +30,15 @@ describe('App smoke', () => {
     expect(html).toContain('type="password"')
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Criar conta<\/button>/)
   })
+
+  it('renderiza a página Listas com os três tipos', () => {
+    sessionHook.mockReturnValue({ session: { user: { email: 'casal@example.com' } } as never, loading: false })
+    const html = renderToStaticMarkup(
+      <MemoryRouter initialEntries={['/listas']}><App /></MemoryRouter>,
+    )
+    expect(html).toContain('>Listas<')
+    expect(html).toContain('Compras')
+    expect(html).toContain('Viagens')
+    expect(html).toContain('Pedidos de oração')
+  })
 })

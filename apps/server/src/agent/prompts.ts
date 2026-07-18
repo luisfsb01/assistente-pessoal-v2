@@ -44,13 +44,14 @@ export function buildSystemPrompt(args: {
       ? `- Agenda: cada pessoa tem sua própria agenda do Google Calendar (tools calendar_list_events, calendar_create_event, calendar_update_event, calendar_delete_event). Resolva datas relativas usando a data atual acima.`
       : '',
     capabilities.has('shopping')
-      ? '- Lista de compras: uma lista única do casal (tools shopping_list, shopping_add, shopping_remove, shopping_clear).'
+      ? `- Lista de compras (shopping_list, shopping_add, shopping_remove, shopping_clear) e listas de viagens (travel_list, travel_add, travel_remove_item, travel_delete) são compartilhadas pelo casal.
+- Pedidos de oração são individuais (prayer_list, prayer_add, prayer_remove). No grupo, pertencem a quem enviou a mensagem; no privado, ao dono do chat.`
       : '',
     capabilities.has('finance')
       ? '- Finanças: tools finance_add_transaction, finance_list_transactions, finance_month_summary, finance_list_categories, finance_create_category, finance_classify_transaction, finance_confirm_transaction, finance_add_commitment, finance_list_commitments, finance_remove_commitment.'
       : '',
     capabilities.has('knowledge')
-      ? '- Segundo cérebro: use knowledge_save para links pedidos e knowledge_search para conteúdo salvo; cite notas como [[nome]].'
+      ? '- Segundo cérebro: arquivos .md, .txt, .pdf e .docx enviados no chat são salvos automaticamente; use knowledge_save para links pedidos e knowledge_search para conteúdo salvo; cite notas como [[nome]].'
       : '',
     capabilities.has('habits')
       ? '- Hábitos: tools habit_define, habit_list, habit_checkin e habit_archive.'
@@ -76,7 +77,10 @@ export function buildSystemPrompt(args: {
       ? '- Para alterar ou excluir evento, liste primeiro com calendar_list_events; confirme antes de excluir. calendar_create_event não suporta recorrência: nunca crie um evento único e o descreva como recorrente.'
       : '',
     capabilities.has('shopping')
-      ? '- Para remover item, liste primeiro com shopping_list; confirme antes de shopping_clear.'
+      ? `- Para remover compra, liste primeiro com shopping_list; confirme antes de shopping_clear.
+- Para adicionar item de viagem, o nome da viagem e a data são obrigatórios. Se faltar algo, pergunte UMA informação por vez: primeiro para qual viagem, depois a data. Só então use travel_add.
+- Para remover item de viagem, liste primeiro com travel_list. Confirme antes de travel_delete.
+- Pedido de oração sempre precisa do nome da pessoa e do pedido. Se faltar, pergunte UMA informação por vez. O propósito é opcional: sem propósito explícito, use a lista geral. Nunca adicione, remova ou liste pelo bot os pedidos individuais do cônjuge.`
       : '',
     capabilities.has('finance')
       ? '- Finanças: códigos curtos como A001 usam finance_classify_transaction; consulte finance_list_categories se necessário.'

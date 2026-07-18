@@ -16,7 +16,7 @@ describe('Layout sidebar', () => {
       'Painel', 'Transações', 'Categorias', 'Objetivos', 'Compromissos',
     ])
     expect(navSections[1].links.map((link) => link.label)).toEqual([
-      'Hábitos', 'Projetos', 'Compras', 'Tarefas',
+      'Hábitos', 'Projetos', 'Listas', 'Tarefas',
     ])
   })
 

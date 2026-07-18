@@ -10,6 +10,7 @@ import { embedText } from '../memory/embeddings.js';
 import { recallMemories } from '../memory/recall.js';
 import { buildTaskTools } from '../tools/tasks.js';
 import { buildShoppingTools } from '../tools/shopping.js';
+import { buildListTools } from '../tools/lists.js';
 import { buildFinanceTools } from '../tools/finance.js';
 import { buildKnowledgeTools } from '../tools/knowledge.js';
 import { buildHabitTools } from '../tools/habits.js';
@@ -76,7 +77,9 @@ export function buildTools(identity: ChatIdentity, context?: AgentToolContext): 
     ...(canAccess(identity, 'tasks')
       ? buildTaskTools(identity, undefined, context?.taskRecurrence)
       : {}),
-    ...(canAccess(identity, 'shopping') ? buildShoppingTools(identity) : {}),
+    ...(canAccess(identity, 'shopping')
+      ? { ...buildShoppingTools(identity), ...buildListTools(identity) }
+      : {}),
     ...(canAccess(identity, 'finance') ? buildFinanceTools() : {}),
     ...(canAccess(identity, 'knowledge') ? buildKnowledgeTools() : {}),
     ...(canAccess(identity, 'habits') && !context?.taskRecurrence.explicit
