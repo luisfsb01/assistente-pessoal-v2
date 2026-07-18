@@ -17,6 +17,9 @@ export default function Objetivos() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
+  const [deletingGoal, setDeletingGoal] = useState<Goal | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
   function openCreate() {
     setModalState({ mode: 'create', name: '', target: '', current: '0' })
     setSaveError(null)
@@ -73,13 +76,15 @@ export default function Objetivos() {
     }
   }
 
-  async function handleDelete(goal: Goal) {
-    if (!window.confirm(`Excluir o objetivo "${goal.name}"?`)) return
+  async function confirmDeleteGoal() {
+    if (!deletingGoal) return
+    setDeleteError(null)
     try {
-      await deleteGoal(goal.id)
+      await deleteGoal(deletingGoal.id)
+      setDeletingGoal(null)
       await reload()
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Erro ao excluir.')
+      setDeleteError(e instanceof Error ? e.message : 'Erro ao excluir.')
     }
   }
 
@@ -112,7 +117,7 @@ export default function Objetivos() {
               key={goal.id}
               goal={goal}
               onEdit={() => openEdit(goal)}
-              onDelete={() => handleDelete(goal)}
+              onDelete={() => { setDeletingGoal(goal); setDeleteError(null) }}
             />
           ))}
         </div>
@@ -168,6 +173,23 @@ export default function Objetivos() {
               placeholder="0,00"
             />
           </label>
+        </Modal>
+      )}
+
+      {/* Delete Modal */}
+      {deletingGoal && (
+        <Modal
+          title="Excluir objetivo"
+          onClose={() => { setDeletingGoal(null); setDeleteError(null) }}
+          footer={
+            <>
+              <button onClick={() => { setDeletingGoal(null); setDeleteError(null) }} className="btn-ghost">Cancelar</button>
+              <button onClick={confirmDeleteGoal} className="btn-primary">Excluir</button>
+            </>
+          }
+        >
+          <p className="text-sm text-ink">Excluir o objetivo "{deletingGoal.name}"?</p>
+          {deleteError && <p className="text-sm text-red-600">{deleteError}</p>}
         </Modal>
       )}
     </div>

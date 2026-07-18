@@ -77,6 +77,9 @@ export default function Categorias() {
   const [catModal, setCatModal] = useState<CatModal>(EMPTY_CAT_MODAL)
   const [subModal, setSubModal] = useState<SubModal>(EMPTY_SUB_MODAL)
 
+  const [deletingCat, setDeletingCat] = useState<{ id: string; name: string } | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
   // ── Data loading ────────────────────────────────────────────────────────────
   async function load() {
     setLoading(true)
@@ -268,21 +271,17 @@ export default function Categorias() {
   }
 
   // ── Delete ──────────────────────────────────────────────────────────────────
-  async function handleDelete(id: string, name: string) {
-    if (!window.confirm(`Excluir "${name}"?`)) return
-    const { error } = await supabase.from('categories').delete().eq('id', id)
+  async function confirmDeleteCat() {
+    if (!deletingCat) return
+    setDeleteError(null)
+    const { error } = await supabase.from('categories').delete().eq('id', deletingCat.id)
     if (error) {
       const msg = error.message ?? ''
-      const isFk =
-        error.code === '23503' ||
-        /foreign key|violates/i.test(msg)
-      if (isFk) {
-        alert('Não dá para excluir: em uso por lançamentos ou possui subcategorias.')
-      } else {
-        alert(msg)
-      }
+      const isFk = error.code === '23503' || /foreign key|violates/i.test(msg)
+      setDeleteError(isFk ? 'Não dá para excluir: em uso por lançamentos ou possui subcategorias.' : msg)
       return
     }
+    setDeletingCat(null)
     await load()
   }
 
@@ -347,7 +346,7 @@ export default function Categorias() {
               ✏️
             </button>
             <button
-              onClick={() => handleDelete(root.id, root.name)}
+              onClick={() => { setDeletingCat({ id: root.id, name: root.name }); setDeleteError(null) }}
               className="text-muted hover:text-ink transition-colors text-sm"
               title="Excluir"
             >
@@ -377,7 +376,7 @@ export default function Categorias() {
                       ✏️
                     </button>
                     <button
-                      onClick={() => handleDelete(sub.id, sub.name)}
+                      onClick={() => { setDeletingCat({ id: sub.id, name: sub.name }); setDeleteError(null) }}
                       className="text-muted hover:text-ink transition-colors text-xs"
                       title="Excluir"
                     >
@@ -630,6 +629,23 @@ export default function Categorias() {
           {subModal.error && (
             <p className="text-sm text-red-500">{subModal.error}</p>
           )}
+        </Modal>
+      )}
+
+      {/* ── Delete Modal ─────────────────────────────────────────────────── */}
+      {deletingCat && (
+        <Modal
+          title="Excluir categoria"
+          onClose={() => { setDeletingCat(null); setDeleteError(null) }}
+          footer={
+            <>
+              <button onClick={() => { setDeletingCat(null); setDeleteError(null) }} className="btn-ghost">Cancelar</button>
+              <button onClick={confirmDeleteCat} className="btn-primary">Excluir</button>
+            </>
+          }
+        >
+          <p className="text-sm text-ink">Excluir "{deletingCat.name}"?</p>
+          {deleteError && <p className="text-sm text-red-600">{deleteError}</p>}
         </Modal>
       )}
     </div>
