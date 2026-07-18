@@ -422,6 +422,7 @@ export default function Transacoes() {
     if (!categoryId) return
     const ids = [...selected]
     if (ids.length === 0) return
+    setActionError(null)
     setBulkSaving(true)
     const { error } = await supabase
       .from('transactions')
@@ -457,6 +458,7 @@ export default function Transacoes() {
   async function handleBulkConfirm() {
     const ids = [...selected]
     if (ids.length === 0) return
+    setActionError(null)
     const { error } = await supabase
       .from('transactions')
       .update({ status: 'confirmed' })
@@ -766,7 +768,7 @@ export default function Transacoes() {
           <button
             className="btn-ghost"
             disabled={safePage <= 1}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            onClick={() => setPage(Math.max(1, safePage - 1))}
           >
             ‹ Anterior
           </button>
@@ -776,7 +778,7 @@ export default function Transacoes() {
           <button
             className="btn-ghost"
             disabled={safePage >= totalPages}
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            onClick={() => setPage(Math.min(totalPages, safePage + 1))}
           >
             Próxima ›
           </button>
