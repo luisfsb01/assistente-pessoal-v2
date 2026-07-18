@@ -1,6 +1,6 @@
 import '../test-setup.js';
 import { describe, expect, it } from 'vitest';
-import type { Transaction } from '../db/finance.js';
+import type { Category, Transaction } from '../db/finance.js';
 import {
   BankNotConfiguredError,
   syncBankTransactions,
@@ -22,23 +22,85 @@ const tx = (id: string, description: string): Transaction => ({
 });
 
 describe('syncBankTransactions', () => {
-  it('importa, aplica regras nas novas e conta as auto-classificadas', async () => {
-    const classified: string[] = [];
+  const transport: Category = {
+    id: 'c1', name: 'Transporte', parent_id: null, monthly_target: null, counts: true, type: 'expense',
+  };
+  const leisure: Category = {
+    id: 'c2', name: 'Lazer', parent_id: null, monthly_target: null, counts: true, type: 'expense',
+  };
+
+  function syncDeps(over: Partial<BankSyncDeps> = {}): BankSyncDeps {
+    return {
+      listBankTransactions: async () => [],
+      upsertBankTransactions: async () => [],
+      listUncategorizedBankTransactions: async () => [],
+      listCategories: async () => [transport, leisure],
+      applyRules: async () => new Map(),
+      setTransactionCategory: async () => true,
+      suggestTransactionCategory: async () => true,
+      suggestCategoriesFor: async () => new Map(),
+      ...over,
+    };
+  }
+
+  it('aplica regras aprendidas e usa a IA no restante durante a atualização', async () => {
+    const confirmed: string[] = [];
+    const suggested: string[] = [];
+    const rows = [tx('t1', 'UBER'), tx('t2', 'XYZ')];
     const deps: BankSyncDeps = {
+      ...syncDeps(),
       listBankTransactions: async () => [
         { id: 'e1', date: '2026-07-12', description: 'UBER', amount: 10, kind: 'expense', providerCategory: null },
         { id: 'e2', date: '2026-07-12', description: 'XYZ', amount: 5, kind: 'expense', providerCategory: null },
       ],
-      upsertBankTransactions: async (rows) => rows.map((r, i) => tx(`t${i + 1}`, r.description)),
+      upsertBankTransactions: async () => rows,
+      listUncategorizedBankTransactions: async () => rows,
       applyRules: async (items) => new Map(items.filter((i) => i.description === 'UBER').map((i) => [i.id, 'c1'])),
       setTransactionCategory: async (id, catId) => {
-        classified.push(`${id}:${catId}`);
+        confirmed.push(`${id}:${catId}`);
+        return true;
+      },
+      suggestCategoriesFor: async (items) =>
+        new Map(items.filter((item) => item.id === 't2').map((item) => [item.id, leisure])),
+      suggestTransactionCategory: async (id, catId) => {
+        suggested.push(`${id}:${catId}`);
         return true;
       },
     };
     const r = await syncBankTransactions('2026-07-12', '2026-07-12', deps);
-    expect(r).toEqual({ imported: 2, autoClassified: 1 });
-    expect(classified).toEqual(['t1:c1']);
+    expect(r).toEqual({ imported: 2, autoClassified: 2 });
+    expect(confirmed).toEqual(['t1:c1']);
+    expect(suggested).toEqual(['t2:c2']);
+  });
+
+  it('retoma transações antigas sem categoria mesmo quando nenhuma nova foi importada', async () => {
+    const prior = tx('prior', 'CINEMA');
+    const suggested: string[] = [];
+    const r = await syncBankTransactions('2026-07-12', '2026-07-18', syncDeps({
+      listUncategorizedBankTransactions: async () => [prior],
+      suggestCategoriesFor: async () => new Map([['prior', leisure]]),
+      suggestTransactionCategory: async (id, categoryId) => {
+        suggested.push(`${id}:${categoryId}`);
+        return true;
+      },
+    }));
+    expect(r).toEqual({ imported: 0, autoClassified: 1 });
+    expect(suggested).toEqual(['prior:c2']);
+  });
+
+  it('falha da IA não perde a importação e deixa a transação para nova tentativa', async () => {
+    const row = tx('t1', 'DESCONHECIDA');
+    const r = await syncBankTransactions('2026-07-12', '2026-07-18', syncDeps({
+      listBankTransactions: async () => [
+        { id: 'e1', date: '2026-07-12', description: row.description, amount: 10, kind: 'expense', providerCategory: null },
+      ],
+      upsertBankTransactions: async () => [row],
+      listUncategorizedBankTransactions: async () => [row],
+      suggestCategoriesFor: async () => {
+        throw new Error('IA fora');
+      },
+    }));
+    expect(r).toEqual({ imported: 1, autoClassified: 0 });
   });
 });
 

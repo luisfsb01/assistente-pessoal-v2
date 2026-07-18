@@ -2,26 +2,47 @@ import {
   applyRules,
   getLastImportedDate,
   getLatestBankTransactionDate,
+  listCategories,
+  listUncategorizedBankTransactions,
   setLastImportedDate,
   setTransactionCategory,
+  suggestTransactionCategory,
   upsertBankTransactions,
+  type Category,
 } from '../db/finance.js';
 import { isBankConfigured, listBankTransactions } from '../lib/banco-mcp.js';
 import { getConfig } from '../lib/config.js';
 import { todayInTz } from '../lib/dates.js';
+import { suggestCategoriesFor } from './categorize.js';
 
 export type BankSyncDeps = {
   listBankTransactions: typeof listBankTransactions;
   upsertBankTransactions: typeof upsertBankTransactions;
+  listUncategorizedBankTransactions: typeof listUncategorizedBankTransactions;
+  listCategories: typeof listCategories;
   applyRules: typeof applyRules;
   setTransactionCategory: typeof setTransactionCategory;
+  suggestTransactionCategory: typeof suggestTransactionCategory;
+  suggestCategoriesFor: (
+    txs: Array<{ id: string; description: string; amount: number }>,
+    categories: Category[],
+  ) => Promise<Map<string, Category>>;
 };
 
-const defaultDeps: BankSyncDeps = { listBankTransactions, upsertBankTransactions, applyRules, setTransactionCategory };
+const defaultDeps: BankSyncDeps = {
+  listBankTransactions,
+  upsertBankTransactions,
+  listUncategorizedBankTransactions,
+  listCategories,
+  applyRules,
+  setTransactionCategory,
+  suggestTransactionCategory,
+  suggestCategoriesFor: (txs, categories) => suggestCategoriesFor(txs, categories),
+};
 
-/** Importa transações do Banco MCP no intervalo e grava no Supabase (dedupe por external_id).
- *  Para as NOVAS, aplica regras aprendidas: as que casam já entram classificadas/confirmadas.
- *  Retorna quantas novas entraram e quantas foram auto-classificadas por regra. */
+/** Importa transações do Banco MCP e classifica tudo que ainda estiver sem categoria.
+ *  Regras aprendidas são confirmadas automaticamente; as demais recebem sugestão da IA
+ *  e continuam pendentes para revisão humana. */
 export async function syncBankTransactions(
   fromDate: string,
   toDate: string,
@@ -33,11 +54,40 @@ export async function syncBankTransactions(
       .filter((t) => t.id)
       .map((t) => ({ externalId: t.id, occurredOn: t.date, description: t.description, amount: t.amount, kind: t.kind })),
   );
-  const ruleMatches = await deps.applyRules(inserted.map((t) => ({ id: t.id, description: t.description })));
+  // Inclui registros importados em tentativas anteriores: se a IA falhou, o próximo
+  // clique em Atualizar retoma a categorização em vez de deixá-los órfãos.
+  const uncategorized = await deps.listUncategorizedBankTransactions();
+  const ruleMatches = await deps.applyRules(
+    uncategorized.map((t) => ({ id: t.id, description: t.description })),
+  );
   let autoClassified = 0;
+  const classifiedIds = new Set<string>();
   for (const [txId, categoryId] of ruleMatches) {
     const ok = await deps.setTransactionCategory(txId, categoryId);
-    if (ok) autoClassified++;
+    if (ok) {
+      autoClassified++;
+      classifiedIds.add(txId);
+    }
+  }
+
+  const remaining = uncategorized.filter((t) => !classifiedIds.has(t.id));
+  if (remaining.length > 0) {
+    try {
+      const categories = await deps.listCategories();
+      const suggestions = await deps.suggestCategoriesFor(
+        remaining.map((t) => ({ id: t.id, description: t.description, amount: Number(t.amount) })),
+        categories,
+      );
+      for (const tx of remaining) {
+        const category = suggestions.get(tx.id);
+        if (!category) continue;
+        if (await deps.suggestTransactionCategory(tx.id, category.id)) autoClassified++;
+      }
+    } catch (err) {
+      // Importação continua válida. Como a categoria permanece nula, o próximo
+      // clique tenta novamente sem duplicar a transação bancária.
+      console.error('[bank-sync] categorização automática falhou (será repetida):', err);
+    }
   }
   return { imported: inserted.length, autoClassified };
 }

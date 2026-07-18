@@ -142,3 +142,23 @@ export async function listOverdueProjectTasks(
     projectName: (r as unknown as { projects: { name: string } }).projects.name,
   }));
 }
+
+/** Ações abertas de projetos ativos com prazo exatamente na data informada. */
+export async function listProjectTasksDueOn(
+  userId: string,
+  date: string,
+): Promise<Array<ProjectTask & { projectName: string }>> {
+  const { data, error } = await supabase
+    .from('project_tasks')
+    .select(`${T_COLS}, projects!inner(name, user_id, active)`)
+    .neq('status', 'done')
+    .eq('due_date', date)
+    .eq('projects.user_id', userId)
+    .eq('projects.active', true)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((r) => ({
+    ...toTask(r as never),
+    projectName: (r as unknown as { projects: { name: string } }).projects.name,
+  }));
+}

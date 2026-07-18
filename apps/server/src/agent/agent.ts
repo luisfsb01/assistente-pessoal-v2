@@ -14,6 +14,7 @@ import { buildFinanceTools } from '../tools/finance.js';
 import { buildKnowledgeTools } from '../tools/knowledge.js';
 import { buildHabitTools } from '../tools/habits.js';
 import { buildProjectTools } from '../tools/projects.js';
+import { buildEmailCleanupTools } from '../tools/email-cleanup.js';
 import { buildCalendarTools, calendarApiFromGoogle } from '../tools/calendar.js';
 import { generateAgentText, shouldUseStrongChatModel } from './models.js';
 import { buildSystemPrompt, subjectsForChat } from './prompts.js';
@@ -82,6 +83,7 @@ export function buildTools(identity: ChatIdentity, context?: AgentToolContext): 
       ? buildHabitTools(identity)
       : {}),
     ...(canAccess(identity, 'projects') ? buildProjectTools(identity) : {}),
+    ...(canAccess(identity, 'email_cleanup') ? buildEmailCleanupTools(identity) : {}),
     ...(canAccess(identity, 'calendar') &&
     hasGoogleCreds(cfg) &&
     context?.calendarExplicit === true

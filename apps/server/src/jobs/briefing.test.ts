@@ -1,8 +1,7 @@
 import '../test-setup.js';
 import { describe, expect, it } from 'vitest';
 import {
-  BRIEFING_SYSTEM_PROMPT,
-  buildBriefingPrompt,
+  formatDailyBriefing,
   isEmptyBriefing,
   runDailyBriefing,
   type BriefingContext,
@@ -12,111 +11,66 @@ import {
 const baseCtx: BriefingContext = {
   name: 'Luis',
   date: '2026-07-15',
-  agenda: [{ id: 'e1', title: 'Dentista', start: '2026-07-15T10:00:00-03:00', end: '2026-07-15T11:00:00-03:00', allDay: false }],
-  tasks: [{ id: 't1', title: 'Pagar boleto', status: 'open', dueDate: '2026-07-15' }],
-  queued: ['Gasto atípico: X — R$ 950,00 em 14/07'],
-  commitmentsToday: [{ id: 'c1', description: 'Internet', amount: 120, day_of_month: 15, active: true }],
-  finance: { month: '2026-07', income: 5000, expense: 2000, invested: 0, balance: 3000, pending_review: 3, by_category: [{ category: 'Casa', spent: 800, target: 1000 }] },
-  cleanup: { count: 2, lines: ['Loja X — OFERTA', 'Banco Y — extrato'] },
-  habits: { week: [{ name: 'Academia', done: 1, target: 3 }], lastWeek: null, lastMonth: null },
+  agenda: [
+    {
+      id: 'e1',
+      title: 'Dentista',
+      start: '2026-07-15T10:00:00-03:00',
+      end: '2026-07-15T11:00:00-03:00',
+      allDay: false,
+    },
+  ],
+  tasks: [{ id: 't1', title: 'Pagar boleto', status: 'open', dueDate: '2026-07-15', recurrence: null }],
+  projectActions: [
+    {
+      id: 'pt1',
+      projectId: 'p1',
+      projectName: 'Site',
+      title: 'Revisar página inicial',
+      status: 'doing',
+      dueDate: '2026-07-15',
+    },
+  ],
+  commitmentsToday: [
+    { id: 'c1', description: 'Internet', amount: 120, day_of_month: 15, active: true },
+  ],
+  habits: [{ name: 'Academia', done: 1, target: 3 }],
 };
 
-describe('buildBriefingPrompt', () => {
-  it('inclui agenda, tarefas, eventos guardados, compromissos e finanças', () => {
-    const p = buildBriefingPrompt(baseCtx);
-    expect(p).toContain('Dentista');
-    expect(p).toContain('10:00');
-    expect(p).toContain('Pagar boleto');
-    expect(p).toContain('R$ 950,00');
-    expect(p).toContain('Internet');
-    expect(p).toContain('R$ 2000,00'); // despesa do mês via formatBrl
-    expect(p).toContain('Casa');
+describe('formatDailyBriefing', () => {
+  it('traz somente compromissos, tarefas, ações de projetos e hábitos em tópicos', () => {
+    const text = formatDailyBriefing(baseCtx);
+    expect(text).toContain('☀️ BOM DIA, LUIS — 15/07');
+    expect(text).toContain('📅 COMPROMISSOS\n• Dentista às 10:00');
+    expect(text).toContain('✅ TAREFAS\n• Pagar boleto');
+    expect(text).toContain('📁 PROJETOS\n• Site: Revisar página inicial');
+    expect(text).toContain('💳 COMPROMISSOS FINANCEIROS\n• Internet — R$ 120,00');
+    expect(text).toContain('🔁 HÁBITOS\n• Academia: 1/3 nesta semana');
   });
-  it('sem finanças, não inclui bloco financeiro', () => {
-    const p = buildBriefingPrompt({ ...baseCtx, finance: null });
-    expect(p).not.toContain('Situação do mês');
-  });
-  it('inclui o relatório da limpeza do e-mail', () => {
-    const p = buildBriefingPrompt(baseCtx);
-    expect(p).toContain('2 e-mails para a lixeira');
-    expect(p).toContain('Loja X — OFERTA');
-  });
-  it('sem limpeza, não inclui o bloco', () => {
-    const p = buildBriefingPrompt({ ...baseCtx, cleanup: null });
-    expect(p).not.toContain('lixeira');
-  });
-  it('inclui o progresso da semana dos hábitos', () => {
-    const p = buildBriefingPrompt(baseCtx);
-    expect(p).toContain('Academia: 1/3');
-  });
-  it('retrô só quando presente no contexto', () => {
-    const p = buildBriefingPrompt({
-      ...baseCtx,
-      habits: { week: [], lastWeek: [{ name: 'Academia', done: 3, target: 3 }], lastMonth: null },
-    });
-    expect(p).toContain('Semana passada');
-    expect(p).toContain('parabenize');
-    expect(buildBriefingPrompt(baseCtx)).not.toContain('Semana passada');
-  });
-});
 
-describe('formato do briefing', () => {
-  it('exige tópicos destacados com emoji, bullets e uma única ação final', () => {
-    expect(BRIEFING_SYSTEM_PROMPT).toContain('FORMATO OBRIGATÓRIO');
-    expect(BRIEFING_SYSTEM_PROMPT).toContain('emoji e título em MAIÚSCULAS');
-    expect(BRIEFING_SYSTEM_PROMPT).toContain('todos iniciados por "• "');
-    expect(BRIEFING_SYSTEM_PROMPT).toContain('🎯 AÇÃO DE HOJE');
-    expect(BRIEFING_SYSTEM_PROMPT).toContain('exatamente um item');
-    expect(BRIEFING_SYSTEM_PROMPT).toContain('Nunca escreva parágrafos corridos');
+  it('não inclui finanças gerais, e-mail, insights ou ação sugerida', () => {
+    const text = formatDailyBriefing(baseCtx);
+    expect(text).not.toContain('FINANÇAS');
+    expect(text).not.toContain('E-MAIL');
+    expect(text).not.toContain('AÇÃO DE HOJE');
+    expect(text).not.toContain('Vale retomar');
   });
 });
 
 describe('isEmptyBriefing', () => {
-  it('vazio quando não há nada a dizer', () => {
+  it('considera apenas as fontes permitidas', () => {
     expect(
       isEmptyBriefing({
         name: 'Esposa',
         date: '2026-07-15',
         agenda: [],
         tasks: [],
-        queued: [],
+        projectActions: [],
         commitmentsToday: [],
-        finance: null,
-        cleanup: null,
         habits: null,
       }),
     ).toBe(true);
     expect(isEmptyBriefing(baseCtx)).toBe(false);
-  });
-  it('só a limpeza já é conteúdo (briefing sai)', () => {
-    expect(
-      isEmptyBriefing({
-        name: 'Luis',
-        date: '2026-07-15',
-        agenda: [],
-        tasks: [],
-        queued: [],
-        commitmentsToday: [],
-        finance: null,
-        cleanup: { count: 1, lines: ['x'] },
-        habits: null,
-      }),
-    ).toBe(false);
-  });
-  it('hábitos com progresso já são conteúdo', () => {
-    expect(
-      isEmptyBriefing({
-        name: 'Esposa',
-        date: '2026-07-15',
-        agenda: [],
-        tasks: [],
-        queued: [],
-        commitmentsToday: [],
-        finance: null,
-        cleanup: null,
-        habits: { week: [{ name: 'Leitura', done: 2, target: 5 }], lastWeek: null, lastMonth: null },
-      }),
-    ).toBe(false);
   });
 });
 
@@ -125,85 +79,93 @@ describe('runDailyBriefing', () => {
     const briefed: string[][] = [];
     return {
       briefed,
-      getUserBySubject: async (s) =>
-        ({ id: s === 'luis' ? 'u1' : 'u2', name: s === 'luis' ? 'Luis' : 'Esposa', calendarId: null, telegramChatId: 0 }) as never,
-      getSubjectChatId: async (s) => (s === 'luis' ? 111 : 222),
+      getUserBySubject: async (subject) =>
+        ({
+          id: subject === 'luis' ? 'u1' : 'u2',
+          name: subject === 'luis' ? 'Luis' : 'Esposa',
+          calendarId: null,
+          telegramChatId: 0,
+        }) as never,
+      getSubjectChatId: async (subject) => (subject === 'luis' ? 111 : 222),
       getGroupChatId: async () => 999,
       listAgenda: async () => [],
       listTasks: async () => [],
+      listProjectTasksDueOn: async () => [],
       listCommitments: async () => [],
       listQueuedForTarget: async () => [],
-      listTrashedSince: async () => [],
       listActiveHabits: async () => [],
       listHabitCheckins: async () => [],
       markBriefed: async (ids: string[]) => void briefed.push(ids),
-      monthSummary: async () => baseCtx.finance!,
-      generate: async () => 'Bom dia! Resumo do dia…',
       todayIso: () => '2026-07-15',
       ...over,
     } as never;
   }
 
-  it('Luis sempre recebe; esposa vazia é pulada; eventos usados viram briefed', async () => {
+  it('inclui apenas tarefas com prazo no dia, não atrasadas ou futuras', async () => {
     const sent: Array<[number, string]> = [];
     const d = deps({
-      listQueuedForTarget: async (t) =>
-        t === 'luis'
-          ? ([{ id: 'q1', summary: 'Gasto atípico', status: 'queued' }] as never)
-          : ([] as never),
+      listTasks: async (userId) =>
+        userId === 'u1'
+          ? ([
+              { id: 'old', title: 'Atrasada', status: 'open', dueDate: '2026-07-14', recurrence: null },
+              { id: 'today', title: 'De hoje', status: 'open', dueDate: '2026-07-15', recurrence: null },
+              { id: 'future', title: 'Futura', status: 'open', dueDate: '2026-07-16', recurrence: null },
+            ] as never)
+          : [],
     });
     await runDailyBriefing(async (chatId, text) => void sent.push([chatId, text]), d);
-    expect(sent).toEqual([[111, 'Bom dia! Resumo do dia…']]);
-    expect(d.briefed).toEqual([['q1']]);
+    expect(sent).toHaveLength(1);
+    expect(sent[0][1]).toContain('De hoje');
+    expect(sent[0][1]).not.toContain('Atrasada');
+    expect(sent[0][1]).not.toContain('Futura');
   });
 
-  it('falha na geração de um não impede o outro', async () => {
-    const sent: number[] = [];
-    let call = 0;
+  it('inclui ações de projetos com a data do dia', async () => {
+    const sent: string[] = [];
     const d = deps({
-      listQueuedForTarget: async () => [{ id: 'q1', summary: 'x', status: 'queued' }] as never, // ambos têm conteúdo
-      monthSummary: async () => baseCtx.finance!,
-      generate: async () => {
-        call++;
-        if (call === 1) throw new Error('boom');
-        return 'Bom dia!';
-      },
+      listProjectTasksDueOn: async (userId) =>
+        userId === 'u1'
+          ? ([
+              {
+                id: 'pt1',
+                projectId: 'p1',
+                projectName: 'Site',
+                title: 'Publicar revisão',
+                status: 'todo',
+                dueDate: '2026-07-15',
+              },
+            ] as never)
+          : [],
     });
-    await runDailyBriefing(async (chatId) => void sent.push(chatId), d);
-    expect(sent).toEqual([222]); // luis falhou, esposa recebeu
+    await runDailyBriefing(async (_chatId, text) => void sent.push(text), d);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toContain('📁 PROJETOS\n• Site: Publicar revisão');
   });
 
-  it('limpeza entra só para o Luis', async () => {
-    const prompts: string[] = [];
+  it('eventos antigos da fila são drenados sem aparecer no briefing', async () => {
+    const sent: string[] = [];
     const d = deps({
-      listTrashedSince: async () => [
-        { summary: 'Lixeira: Loja X — OFERTA', reason: 'promoção' },
-      ],
-      generate: async (_s: string, prompt: string) => {
-        prompts.push(prompt);
-        return 'Bom dia!';
-      },
+      listQueuedForTarget: async (target) =>
+        target === 'luis' ? ([{ id: 'q1', summary: 'Gasto atípico', status: 'queued' }] as never) : [],
+      listTasks: async (userId) =>
+        userId === 'u1'
+          ? ([{ id: 't1', title: 'Tarefa do dia', status: 'open', dueDate: '2026-07-15', recurrence: null }] as never)
+          : [],
     });
-    await runDailyBriefing(async () => undefined, d);
-    expect(prompts).toHaveLength(1); // esposa continua vazia (limpeza não conta para ela)
-    expect(prompts[0]).toContain('Loja X — OFERTA');
+    await runDailyBriefing(async (_chatId, text) => void sent.push(text), d);
+    expect(sent[0]).not.toContain('Gasto atípico');
+    expect(d.briefed).toContainEqual(['q1']);
   });
 
-  it('segunda-feira inclui retrô da semana anterior', async () => {
-    const prompts: string[] = [];
+  it('hábitos mostram somente progresso, sem comentário motivacional', async () => {
+    const sent: string[] = [];
     const d = deps({
-      todayIso: () => '2026-07-13', // segunda
-      listActiveHabits: async () => [{ id: 'h1', name: 'Academia', targetPerWeek: 3 }] as never,
-      listHabitCheckins: async () => [
-        { habitId: 'h1', date: '2026-07-08', done: true },
-        { habitId: 'h1', date: '2026-07-10', done: true },
-      ],
-      generate: async (_s: string, prompt: string) => {
-        prompts.push(prompt);
-        return 'Bom dia!';
-      },
+      listActiveHabits: async (userId) =>
+        userId === 'u1' ? ([{ id: 'h1', name: 'Academia', targetPerWeek: 3 }] as never) : [],
+      listHabitCheckins: async () => [{ habitId: 'h1', date: '2026-07-15', done: true }],
     });
-    await runDailyBriefing(async () => undefined, d);
-    expect(prompts.some((p) => p.includes('Semana passada') && p.includes('Academia: 2/3'))).toBe(true);
+    await runDailyBriefing(async (_chatId, text) => void sent.push(text), d);
+    expect(sent[0]).toContain('• Academia: 1/3 nesta semana');
+    expect(sent[0]).not.toContain('Vale');
   });
 });

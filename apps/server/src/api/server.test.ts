@@ -69,6 +69,7 @@ describe('createApp', () => {
       syncBankTransactions: async () => ({
         from: '2026-07-15', to: '2026-07-18', imported: 3, autoClassified: 2,
       }),
+      reclassifyTransactions: async (items) => ({ updated: items.length, learned: items.length }),
       budgetBrl: () => 50,
       ...over,
     };
@@ -124,6 +125,40 @@ describe('createApp', () => {
       const res = await app.request('/api/finance/sync', { method: 'POST', headers: auth });
       expect(res.status).toBe(502);
       expect(await res.json()).toEqual({ error: 'Não foi possível buscar novas transações agora.' });
+    });
+
+    it('POST /api/finance/reclassify confirma e aprende as correções manuais', async () => {
+      const calls: unknown[] = [];
+      const app = createApp(dir, fakeDeps({
+        reclassifyTransactions: async (items) => {
+          calls.push(items);
+          return { updated: items.length, learned: items.length };
+        },
+      }));
+      const res = await app.request('/api/finance/reclassify', {
+        method: 'POST',
+        headers: { ...auth, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: [{ id: 't1', categoryId: 'c1' }] }),
+      });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ updated: 1, learned: 1 });
+      expect(calls).toEqual([[{ id: 't1', categoryId: 'c1' }]]);
+    });
+
+    it('POST /api/finance/reclassify valida o lote', async () => {
+      const app = createApp(dir, fakeDeps());
+      const empty = await app.request('/api/finance/reclassify', {
+        method: 'POST',
+        headers: { ...auth, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: [] }),
+      });
+      expect(empty.status).toBe(400);
+      const invalid = await app.request('/api/finance/reclassify', {
+        method: 'POST',
+        headers: { ...auth, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: [{ id: '', categoryId: 'c1' }] }),
+      });
+      expect(invalid.status).toBe(400);
     });
 
     it('PUT /api/memories/:id regera o embedding e atualiza', async () => {

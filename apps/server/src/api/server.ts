@@ -15,6 +15,11 @@ import { bearerToken, isValidAccessToken } from './auth.js';
 import { createHash } from 'node:crypto';
 import { FixedWindowRateLimiter } from '../lib/rate-limit.js';
 import { BankNotConfiguredError, syncBankTransactionsToToday } from '../services/bank-sync.js';
+import {
+  reclassifyTransactions,
+  TransactionNotFoundError,
+  type ReclassificationItem,
+} from '../services/transaction-reclassification.js';
 
 /**
  * Resolve o caminho do build da SPA (`apps/web/dist`).
@@ -42,6 +47,7 @@ export type ApiDeps = {
   getMonthCostByPurpose(): Promise<Array<{ purpose: string; costBrl: number }>>;
   getMonthlyCostHistory(): Promise<Array<{ month: string; costBrl: number }>>;
   syncBankTransactions(): Promise<{ from: string; to: string; imported: number; autoClassified: number }>;
+  reclassifyTransactions(items: ReclassificationItem[]): Promise<{ updated: number; learned: number }>;
   budgetBrl(): number;
 };
 
@@ -54,6 +60,7 @@ export function defaultApiDeps(): ApiDeps {
     getMonthCostByPurpose,
     getMonthlyCostHistory,
     syncBankTransactions: syncBankTransactionsToToday,
+    reclassifyTransactions,
     budgetBrl: () => getConfig().LLM_BUDGET_BRL,
   };
 }
@@ -136,6 +143,32 @@ export function createApp(
       }
       console.error('[api:finance-sync] sincronização falhou:', err);
       return c.json({ error: 'Não foi possível buscar novas transações agora.' }, 502);
+    }
+  });
+
+  app.post('/api/finance/reclassify', async (c) => {
+    const body = (await c.req.json().catch(() => null)) as { items?: unknown } | null;
+    if (!Array.isArray(body?.items) || body.items.length === 0 || body.items.length > 200) {
+      return c.json({ error: 'Informe de 1 a 200 transações.' }, 400);
+    }
+    const items: ReclassificationItem[] = [];
+    for (const raw of body.items) {
+      if (!raw || typeof raw !== 'object') return c.json({ error: 'Item de reclassificação inválido.' }, 400);
+      const { id, categoryId } = raw as Record<string, unknown>;
+      if (
+        typeof id !== 'string' || id.length < 1 || id.length > 100 ||
+        typeof categoryId !== 'string' || categoryId.length < 1 || categoryId.length > 100
+      ) {
+        return c.json({ error: 'Item de reclassificação inválido.' }, 400);
+      }
+      items.push({ id, categoryId });
+    }
+    try {
+      return c.json(await deps.reclassifyTransactions(items));
+    } catch (err) {
+      if (err instanceof TransactionNotFoundError) return c.json({ error: err.message }, 404);
+      console.error('[api:finance-reclassify] falha ao reclassificar:', err);
+      return c.json({ error: 'A categoria foi alterada, mas não foi possível salvar o aprendizado.' }, 500);
     }
   });
 

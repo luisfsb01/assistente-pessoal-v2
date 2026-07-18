@@ -1,22 +1,14 @@
-import { generateAgentText } from '../agent/models.js';
 import { getGroupChatId, getSubjectChatId, getUserBySubject } from '../db/chats.js';
-import { listEventsByKindSince, listQueuedForTarget, markBriefed, type QueueEvent } from '../db/events.js';
+import { listQueuedForTarget, markBriefed } from '../db/events.js';
 import { listCommitments, type Commitment } from '../db/finance.js';
 import { listActiveHabits, listCheckinsBetween } from '../db/habits.js';
+import { listProjectTasksDueOn, type ProjectTask } from '../db/projects.js';
 import { listTasks, type Task } from '../db/tasks.js';
 import { getConfig } from '../lib/config.js';
 import { addDays, todayInTz } from '../lib/dates.js';
 import { formatBrl } from '../lib/format.js';
 import { getCalendarClient, hasGoogleCreds } from '../lib/google.js';
-import {
-  monthProgress,
-  prevMonthRange,
-  prevWeekRange,
-  weekProgress,
-  weekStart,
-  type HabitProgress,
-} from '../services/habit-stats.js';
-import { computeMonthSummary, type MonthSummary } from '../services/month-summary.js';
+import { weekProgress, weekStart, type HabitProgress } from '../services/habit-stats.js';
 import {
   calendarApiFromGoogle,
   zonedDayEndIso,
@@ -29,11 +21,9 @@ export type BriefingContext = {
   date: string;
   agenda: CalEvent[];
   tasks: Task[];
-  queued: string[];
+  projectActions: Array<ProjectTask & { projectName: string }>;
   commitmentsToday: Commitment[];
-  finance: MonthSummary | null;
-  cleanup: { count: number; lines: string[] } | null;
-  habits: { week: HabitProgress[]; lastWeek: HabitProgress[] | null; lastMonth: HabitProgress[] | null } | null;
+  habits: HabitProgress[] | null;
 };
 
 function ddmm(date: string): string {
@@ -42,44 +32,23 @@ function ddmm(date: string): string {
 }
 
 function eventLine(e: CalEvent): string {
-  return e.allDay ? `- ${e.title} (dia inteiro)` : `- ${e.title} às ${e.start.slice(11, 16)}`;
+  return e.allDay ? `• ${e.title} (dia inteiro)` : `• ${e.title} às ${e.start.slice(11, 16)}`;
 }
 
-/** PURA: contexto → prompt com os dados do dia (o modelo escreve a análise). */
-export function buildBriefingPrompt(ctx: BriefingContext): string {
-  const parts: string[] = [`Data: ${ddmm(ctx.date)}. Pessoa: ${ctx.name}.`];
-  if (ctx.agenda.length > 0) parts.push(`Agenda de hoje:\n${ctx.agenda.map(eventLine).join('\n')}`);
+/** Saída determinística: somente itens operacionais, sem análises ou recomendações da IA. */
+export function formatDailyBriefing(ctx: BriefingContext): string {
+  const parts: string[] = [`☀️ BOM DIA, ${ctx.name.toLocaleUpperCase('pt-BR')} — ${ddmm(ctx.date)}`];
+  if (ctx.agenda.length > 0) parts.push(`📅 COMPROMISSOS\n${ctx.agenda.map(eventLine).join('\n')}`);
   if (ctx.tasks.length > 0)
-    parts.push(`Tarefas com prazo até hoje:\n${ctx.tasks.map((t) => `- ${t.title}${t.dueDate ? ` (${ddmm(t.dueDate)})` : ''}`).join('\n')}`);
+    parts.push(`✅ TAREFAS\n${ctx.tasks.map((t) => `• ${t.title}`).join('\n')}`);
+  if (ctx.projectActions.length > 0)
+    parts.push(`📁 PROJETOS\n${ctx.projectActions.map((t) => `• ${t.projectName}: ${t.title}`).join('\n')}`);
   if (ctx.commitmentsToday.length > 0)
     parts.push(
-      `Compromissos financeiros de hoje:\n${ctx.commitmentsToday.map((c) => `- ${c.description}${c.amount ? ` — ${formatBrl(Number(c.amount))}` : ''}`).join('\n')}`,
+      `💳 COMPROMISSOS FINANCEIROS\n${ctx.commitmentsToday.map((c) => `• ${c.description}${c.amount ? ` — ${formatBrl(Number(c.amount))}` : ''}`).join('\n')}`,
     );
-  if (ctx.queued.length > 0) parts.push(`Acontecimentos guardados desde ontem:\n${ctx.queued.map((q) => `- ${q}`).join('\n')}`);
-  if (ctx.finance) {
-    const f = ctx.finance;
-    const cats = f.by_category
-      .slice(0, 5)
-      .map((c) => `- ${c.category}: ${formatBrl(c.spent)}${c.target != null ? ` de ${formatBrl(c.target)}` : ''}`)
-      .join('\n');
-    parts.push(
-      `Situação do mês (${f.month}): receitas ${formatBrl(f.income)}, despesas ${formatBrl(f.expense)}, investido ${formatBrl(f.invested)}, saldo ${formatBrl(f.balance)}, ${f.pending_review} gastos a classificar.${cats ? `\nPor categoria:\n${cats}` : ''}`,
-    );
-  }
-  if (ctx.cleanup && ctx.cleanup.count > 0) {
-    const extra = ctx.cleanup.count > ctx.cleanup.lines.length ? `\n(e mais ${ctx.cleanup.count - ctx.cleanup.lines.length})` : '';
-    parts.push(`Limpeza do e-mail (últimas 24h): ${ctx.cleanup.count} e-mails para a lixeira:\n${ctx.cleanup.lines.map((l) => `- ${l}`).join('\n')}${extra}`);
-  }
-  if (ctx.habits && ctx.habits.week.length > 0)
-    parts.push(`Hábitos da semana:\n${ctx.habits.week.map((h) => `- ${h.name}: ${h.done}/${h.target}`).join('\n')}`);
-  if (ctx.habits?.lastWeek)
-    parts.push(
-      `Semana passada (hábitos):\n${ctx.habits.lastWeek.map((h) => `- ${h.name}: ${h.done}/${h.target}`).join('\n')}\nComente a semana passada: parabenize meta batida, motive sem cobrar quem ficou abaixo.`,
-    );
-  if (ctx.habits?.lastMonth)
-    parts.push(
-      `Mês passado (hábitos):\n${ctx.habits.lastMonth.map((h) => `- ${h.name}: ${h.done}/${h.target}`).join('\n')}\nComente o mês passado: parabenize meta batida, motive sem cobrar quem ficou abaixo.`,
-    );
+  if (ctx.habits && ctx.habits.length > 0)
+    parts.push(`🔁 HÁBITOS\n${ctx.habits.map((h) => `• ${h.name}: ${h.done}/${h.target} nesta semana`).join('\n')}`);
   return parts.join('\n\n');
 }
 
@@ -88,27 +57,11 @@ export function isEmptyBriefing(ctx: BriefingContext): boolean {
   return (
     ctx.agenda.length === 0 &&
     ctx.tasks.length === 0 &&
-    ctx.queued.length === 0 &&
+    ctx.projectActions.length === 0 &&
     ctx.commitmentsToday.length === 0 &&
-    ctx.finance === null &&
-    ctx.cleanup === null &&
     ctx.habits === null
   );
 }
-
-export const BRIEFING_SYSTEM_PROMPT = `Você escreve o briefing matinal de um assistente pessoal.
-Faça uma análise CURTA e OPINADA em PT-BR: conecte os pontos, destaque o que importa e o que pode dar errado hoje.
-
-FORMATO OBRIGATÓRIO:
-- Abra com uma saudação curta em uma linha própria: "☀️ BOM DIA, [NOME] — [DD/MM]".
-- Depois, organize o conteúdo em 3 a 6 tópicos relevantes. Não crie tópicos vazios.
-- Cada tópico começa em uma linha própria com emoji e título em MAIÚSCULAS, por exemplo: "💰 FINANÇAS".
-- Abaixo de cada título, escreva de 1 a 3 itens, todos iniciados por "• ".
-- Deixe uma linha em branco entre os tópicos.
-- Termine com o tópico "🎯 AÇÃO DE HOJE" e exatamente um item "• " com a ação mais importante.
-- Nunca escreva parágrafos corridos, texto solto entre os tópicos, listas numeradas ou tabelas.
-
-Datas como dd/mm, valores como R$ 123,45. Sem ids. No máximo 18 linhas de conteúdo, sem contar linhas em branco.`;
 
 export type BriefingDeps = {
   getUserBySubject: typeof getUserBySubject;
@@ -116,14 +69,12 @@ export type BriefingDeps = {
   getGroupChatId: typeof getGroupChatId;
   listAgenda: (calendarId: string, fromDate: string, toDate: string) => Promise<CalEvent[]>;
   listTasks: typeof listTasks;
+  listProjectTasksDueOn: typeof listProjectTasksDueOn;
   listCommitments: typeof listCommitments;
   listQueuedForTarget: typeof listQueuedForTarget;
-  listTrashedSince: (sinceIso: string) => Promise<Array<{ summary: string; reason: string | null }>>;
   listActiveHabits: typeof listActiveHabits;
   listHabitCheckins: typeof listCheckinsBetween;
   markBriefed: typeof markBriefed;
-  monthSummary: (month: string) => Promise<MonthSummary>;
-  generate: (system: string, prompt: string) => Promise<string>;
   todayIso: () => string;
 };
 
@@ -143,15 +94,12 @@ export function defaultBriefingDeps(): BriefingDeps {
     getGroupChatId,
     listAgenda,
     listTasks,
+    listProjectTasksDueOn,
     listCommitments,
     listQueuedForTarget,
-    listTrashedSince: (sinceIso) => listEventsByKindSince('email_trashed', sinceIso),
     listActiveHabits,
     listHabitCheckins: listCheckinsBetween,
     markBriefed,
-    monthSummary: computeMonthSummary,
-    generate: (system, prompt) =>
-      generateAgentText({ purpose: 'briefing', system, messages: [{ role: 'user', content: prompt }] }),
     todayIso: () => todayInTz(cfg.TIMEZONE),
   };
 }
@@ -163,36 +111,18 @@ async function contextFor(subject: 'luis' | 'esposa', deps: BriefingDeps): Promi
   const dayOfMonth = Number(today.slice(8, 10));
 
   const agenda = user.calendarId ? await deps.listAgenda(user.calendarId, today, today).catch(() => []) : [];
-  const tasks = (await deps.listTasks(user.id, 'open')).filter((t) => t.dueDate !== null && t.dueDate <= today);
-  const queuedEvents: QueueEvent[] = await deps.listQueuedForTarget(subject);
+  const tasks = (await deps.listTasks(user.id, 'open')).filter((t) => t.dueDate === today);
+  const projectActions = await deps.listProjectTasksDueOn(user.id, today).catch(() => []);
+  const queuedEvents = await deps.listQueuedForTarget(subject);
   const commitmentsToday =
     subject === 'luis' ? (await deps.listCommitments()).filter((c) => c.day_of_month === dayOfMonth) : [];
-  const finance = subject === 'luis' ? await deps.monthSummary(today.slice(0, 7)) : null;
-
-  const trashedRaw =
-    subject === 'luis'
-      ? await deps.listTrashedSince(new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()).catch(() => [])
-      : [];
-  const cleanup =
-    trashedRaw.length > 0
-      ? { count: trashedRaw.length, lines: trashedRaw.slice(0, 10).map((t) => t.summary.replace('Lixeira: ', '')) }
-      : null;
 
   let habitsCtx: BriefingContext['habits'] = null;
   const activeHabits = await deps.listActiveHabits(user.id).catch(() => []);
   if (activeHabits.length > 0) {
-    const isMonday = weekStart(today) === today;
-    const isFirstOfMonth = today.endsWith('-01');
     const wFrom = weekStart(today);
-    const pw = isMonday ? prevWeekRange(today) : null;
-    const pm = isFirstOfMonth ? prevMonthRange(today) : null;
-    const oldest = [wFrom, pw?.from, pm?.from].filter((x): x is string => Boolean(x)).sort()[0];
-    const checkins = await deps.listHabitCheckins(activeHabits.map((h) => h.id), oldest, today).catch(() => []);
-    habitsCtx = {
-      week: weekProgress(activeHabits, checkins, wFrom, today),
-      lastWeek: pw ? weekProgress(activeHabits, checkins, pw.from, pw.to) : null,
-      lastMonth: pm ? monthProgress(activeHabits, checkins, pm.from, pm.to) : null,
-    };
+    const checkins = await deps.listHabitCheckins(activeHabits.map((h) => h.id), wFrom, today).catch(() => []);
+    habitsCtx = weekProgress(activeHabits, checkins, wFrom, today);
   }
 
   return {
@@ -201,10 +131,8 @@ async function contextFor(subject: 'luis' | 'esposa', deps: BriefingDeps): Promi
       date: today,
       agenda,
       tasks,
-      queued: queuedEvents.map((q) => q.summary),
+      projectActions,
       commitmentsToday,
-      finance,
-      cleanup,
       habits: habitsCtx,
     },
     queuedIds: queuedEvents.map((q) => q.id),
@@ -219,10 +147,14 @@ export async function runDailyBriefing(
   for (const subject of ['luis', 'esposa'] as const) {
     try {
       const r = await contextFor(subject, deps);
-      if (!r || isEmptyBriefing(r.ctx)) continue;
+      if (!r) continue;
+      if (isEmptyBriefing(r.ctx)) {
+        await deps.markBriefed(r.queuedIds);
+        continue;
+      }
       const chatId = await deps.getSubjectChatId(subject);
       if (chatId === null) continue;
-      const text = await deps.generate(BRIEFING_SYSTEM_PROMPT, buildBriefingPrompt(r.ctx));
+      const text = formatDailyBriefing(r.ctx);
       await send(chatId, text);
       await deps.markBriefed(r.queuedIds);
     } catch (err) {
@@ -250,21 +182,20 @@ export async function runCoupleBriefing(
       agenda.push(...events.map((e) => ({ ...e, title: `${e.title} (${user.name})` })));
     }
     const queuedEvents = await deps.listQueuedForTarget('grupo');
-    const finance = await deps.monthSummary(today.slice(0, 7));
-
     const ctx: BriefingContext = {
       name: 'Casal',
       date: today,
       agenda,
       tasks: [],
-      queued: queuedEvents.map((q) => q.summary),
+      projectActions: [],
       commitmentsToday: [],
-      finance,
-      cleanup: null,
       habits: null,
     };
-    const prompt = `${buildBriefingPrompt(ctx)}\n\n(É a visão de SÁBADO do casal: foque no fim de semana e em como o mês está indo.)`;
-    const text = await deps.generate(BRIEFING_SYSTEM_PROMPT, prompt);
+    if (isEmptyBriefing(ctx)) {
+      await deps.markBriefed(queuedEvents.map((q) => q.id));
+      return;
+    }
+    const text = formatDailyBriefing(ctx);
     await send(chatId, text);
     await deps.markBriefed(queuedEvents.map((q) => q.id));
   } catch (err) {

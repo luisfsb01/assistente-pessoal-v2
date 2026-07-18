@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { upsertRule } from '../lib/rules'
+import { reclassifyTransactions } from '../lib/rules'
 import { formatBrl } from '../lib/format'
 import { type PeriodKey, PERIOD_LABELS, periodRange } from '../lib/period'
 import type { Category } from '../lib/finance-data'
@@ -334,7 +334,10 @@ export default function Transacoes() {
       await loadTxs(range.from, range.to)
       const interval = `${result.from.split('-').reverse().join('/')} a ${result.to.split('-').reverse().join('/')}`
       if (result.imported === 0) {
-        setSyncMessage(`Tudo atualizado. Nenhuma nova transação encontrada de ${interval}.`)
+        const recovered = result.autoClassified > 0
+          ? ` ${result.autoClassified} transação${result.autoClassified === 1 ? '' : 'ões'} que estava${result.autoClassified === 1 ? '' : 'm'} sem categoria foi${result.autoClassified === 1 ? '' : 'ram'} classificada${result.autoClassified === 1 ? '' : 's'}.`
+          : ''
+        setSyncMessage(`Tudo atualizado. Nenhuma nova transação encontrada de ${interval}.${recovered}`)
       } else {
         const classified = result.autoClassified > 0
           ? ` ${result.autoClassified} classificada${result.autoClassified === 1 ? '' : 's'} automaticamente.`
@@ -422,7 +425,17 @@ export default function Transacoes() {
       // Aprende com a reclassificação: só quando uma categoria foi escolhida e mudou.
       const original = txs.find((t) => t.id === modal.id)?.category_id ?? null
       if (resolvedCategoryId && resolvedCategoryId !== original) {
-        upsertRule(payload.description, resolvedCategoryId).catch(() => {})
+        try {
+          await reclassifyTransactions([{ id: modal.id, categoryId: resolvedCategoryId }])
+        } catch (err) {
+          await loadTxs(range.from, range.to)
+          setModal((m) => ({
+            ...m,
+            saving: false,
+            error: err instanceof Error ? err.message : 'Transação salva, mas o aprendizado falhou.',
+          }))
+          return
+        }
       }
     } else {
       const { error } = await supabase.from('transactions').insert({
@@ -465,16 +478,12 @@ export default function Transacoes() {
     if (ids.length === 0) return
     setActionError(null)
     setBulkSaving(true)
-    const { error } = await supabase
-      .from('transactions')
-      .update({ category_id: categoryId, status: 'confirmed' })
-      .in('id', ids)
-    if (error) { setActionError(error.message); setBulkSaving(false); return }
-    // Aprende com a reclassificação (fire-and-forget; a lógica de ambiguidade em upsertRule trata conflitos).
-    const byId = new Map(txs.map((t) => [t.id, t]))
-    for (const id of ids) {
-      const tx = byId.get(id)
-      if (tx) upsertRule(tx.description, categoryId).catch(() => {})
+    try {
+      await reclassifyTransactions(ids.map((id) => ({ id, categoryId })))
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Não foi possível reclassificar as transações.')
+      setBulkSaving(false)
+      return
     }
     await loadTxs(range.from, range.to)
     clearSelection()

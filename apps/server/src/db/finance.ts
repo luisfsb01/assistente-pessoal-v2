@@ -163,6 +163,19 @@ export async function listPendingTransactions(): Promise<Transaction[]> {
   return data as Transaction[];
 }
 
+/** Transações bancárias que ainda precisam receber ao menos uma sugestão de categoria. */
+export async function listUncategorizedBankTransactions(limit = 200): Promise<Transaction[]> {
+  const { data, error } = await supabase
+    .from('transactions')
+    .select(TX_COLS)
+    .eq('source', 'bank')
+    .is('category_id', null)
+    .order('occurred_on', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []) as Transaction[];
+}
+
 /** Garante um review_code para a transação; retorna o código (existente ou novo). */
 export async function ensureReviewCode(txId: string): Promise<string | null> {
   const { data: tx, error: e1 } = await supabase.from('transactions').select('review_code').eq('id', txId).maybeSingle();
@@ -212,28 +225,16 @@ export function normalizePattern(desc: string): string {
 }
 
 /** Aprende que uma descrição mapeia para uma categoria.
- *  Se já existir regra para o mesmo pattern apontando para OUTRA categoria, a
- *  descrição é ambígua → remove a regra (futuras idênticas caem na IA/manual). */
+ *  Uma reclassificação manual mais recente substitui a regra anterior. */
 export async function learnRule(description: string, categoryId: string): Promise<void> {
   const pattern = normalizePattern(description);
   if (!pattern) return;
-  const { data: existing, error: selErr } = await supabase
-    .from('category_rules')
-    .select('id, category_id')
-    .eq('pattern', pattern)
-    .maybeSingle();
-  if (selErr) throw selErr;
-  if (existing) {
-    if (existing.category_id === categoryId) {
-      await supabase.from('category_rules').update({ updated_at: new Date().toISOString() }).eq('id', existing.id);
-    } else {
-      await supabase.from('category_rules').delete().eq('id', existing.id);
-    }
-    return;
-  }
   const { error } = await supabase
     .from('category_rules')
-    .insert({ pattern, category_id: categoryId, updated_at: new Date().toISOString() });
+    .upsert(
+      { pattern, category_id: categoryId, updated_at: new Date().toISOString() },
+      { onConflict: 'pattern' },
+    );
   if (error) throw error;
 }
 

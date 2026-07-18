@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { generateAgentObject } from '../agent/models.js';
+import { listEmailCleanupProtections, type EmailCleanupProtection } from '../db/email-cleanup.js';
 import { insertEvent } from '../db/events.js';
+import { getUserBySubject } from '../db/chats.js';
 import { getState, setState } from '../db/state.js';
 import { getConfig } from '../lib/config.js';
 import { gmailApiFromGoogle, type InboxEmail } from '../lib/gmail.js';
@@ -32,6 +34,7 @@ export type EmailCleanupDeps = {
   getState: typeof getState;
   setState: typeof setState;
   insertEvent: typeof insertEvent;
+  listProtections: () => Promise<EmailCleanupProtection[]>;
   recall: (text: string, subjects: ('luis' | 'esposa' | 'casal')[]) => Promise<Array<{ content: string }>>;
   generate: <T>(opts: { purpose: 'judgment'; system: string; prompt: string; schema: z.Schema<T> }) => Promise<T>;
   now: () => Date;
@@ -45,6 +48,10 @@ export function defaultCleanupDeps(): EmailCleanupDeps {
     getState,
     setState,
     insertEvent,
+    listProtections: async () => {
+      const user = await getUserBySubject('luis');
+      return user ? listEmailCleanupProtections(user.id) : [];
+    },
     recall: recallMemories,
     generate: (opts) => generateAgentObject(opts),
     now: () => new Date(),
@@ -69,7 +76,30 @@ export function buildCleanupPrompt(emails: InboxEmail[], memories: Array<{ conte
   return `${memoryBlock}E-mails novos na caixa de entrada:\n${lines.join('\n')}\n\nDevolva um veredito para CADA id listado.`;
 }
 
-/** Um ciclo de limpeza: lista novos → classifica em lote → lixeira/briefing/nada.
+function normalized(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('pt-BR')
+    .trim();
+}
+
+/** Regra persistida vence qualquer classificação da IA. */
+export function isProtectedEmail(email: InboxEmail, protections: EmailCleanupProtection[]): boolean {
+  const from = normalized(email.from);
+  const subject = normalized(email.subject);
+  const all = normalized([email.from, email.subject, email.snippet, ...email.categories].join(' '));
+  return protections.some((rule) => {
+    const value = normalized(rule.matchValue);
+    if (!value) return false;
+    if (rule.matchOn === 'sender') return from.includes(value);
+    if (rule.matchOn === 'domain') return from.includes(`@${value.replace(/^@/, '')}`);
+    if (rule.matchOn === 'subject') return subject.includes(value);
+    return all.includes(value);
+  });
+}
+
+/** Um ciclo de limpeza: lista novos → aplica proteções → classifica em lote → lixeira/nada.
  *  Estrela nunca vai para a lixeira; falha da IA aborta sem avançar o cursor. */
 export async function runEmailCleanup(
   deps: EmailCleanupDeps = defaultCleanupDeps(),
@@ -85,10 +115,23 @@ export async function runEmailCleanup(
   if (allNew.length === 0) return { scanned: 0, trashed: 0, important: 0 };
   // allNew vem do mais antigo pro mais novo; numa rajada, processa só os MAX_POR_RODADA mais antigos
   const emails = allNew.slice(0, MAX_POR_RODADA);
+  const protections = await deps.listProtections().catch((err) => {
+    console.error('[email-cleanup] proteções indisponíveis (rodada abortada):', err);
+    return null;
+  });
+  // Falhar ao consultar as proteções não pode causar descarte indevido.
+  if (protections === null) return { scanned: emails.length, trashed: 0, important: 0 };
+  const candidates = emails.filter((email) => !isProtectedEmail(email, protections));
+
+  if (candidates.length === 0) {
+    const maxInternal = Math.max(...emails.map((e) => e.internalDate));
+    await deps.setState(STATE_KEY, { lastInternalDate: maxInternal } satisfies CleanupState);
+    return { scanned: emails.length, trashed: 0, important: 0 };
+  }
 
   let memories: Array<{ content: string }> = [];
   try {
-    memories = await deps.recall(emails.map((e) => `${e.from}: ${e.subject}`).join('\n'), ['luis']);
+    memories = await deps.recall(candidates.map((e) => `${e.from}: ${e.subject}`).join('\n'), ['luis']);
   } catch (err) {
     console.error('[email-cleanup] recall falhou (seguindo sem memórias):', err);
   }
@@ -98,7 +141,7 @@ export async function runEmailCleanup(
     const result = await deps.generate({
       purpose: 'judgment',
       system: SYSTEM,
-      prompt: buildCleanupPrompt(emails, memories),
+      prompt: buildCleanupPrompt(candidates, memories),
       schema: classifySchema,
     });
     byId = new Map(result.verdicts.map((v) => [v.id, v]));
@@ -110,7 +153,7 @@ export async function runEmailCleanup(
 
   let trashed = 0;
   let important = 0;
-  for (const email of emails) {
+  for (const email of candidates) {
     const v = byId.get(email.id);
     // estrela nunca sai da caixa; sem veredito = normal
     const verdict = email.starred ? 'normal' : (v?.verdict ?? 'normal');
@@ -127,14 +170,7 @@ export async function runEmailCleanup(
         });
         trashed++;
       } else if (verdict === 'importante') {
-        await deps.insertEvent({
-          source: 'gmail',
-          kind: 'email_important',
-          dedupeKey: `gmail:important:${email.id}`,
-          summary: `E-mail importante: ${email.from} — ${email.subject}`,
-          payload: { from: email.from, subject: email.subject },
-          resolution: { decision: 'briefing', reason: v?.reason ?? '', target: 'luis', status: 'queued' },
-        });
+        // Permanece na caixa de entrada; o Luis já revisa o e-mail diariamente.
         important++;
       }
     } catch (err) {

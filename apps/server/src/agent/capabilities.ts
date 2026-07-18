@@ -8,7 +8,8 @@ export type AgentCapability =
   | 'finance'
   | 'knowledge'
   | 'habits'
-  | 'projects';
+  | 'projects'
+  | 'email_cleanup';
 
 /**
  * Matriz de autorização do bot. A restrição acontece antes de montar o ToolSet,
@@ -28,6 +29,7 @@ export function capabilitiesForChat(identity: ChatIdentity): ReadonlySet<AgentCa
       'knowledge',
       'habits',
       'projects',
+      'email_cleanup',
     ]);
   }
   return new Set(['memory', 'tasks', 'shopping', 'calendar', 'habits', 'projects']);

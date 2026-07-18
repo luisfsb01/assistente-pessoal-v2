@@ -12,15 +12,20 @@ describe('capabilitiesForChat', () => {
   it('finanças e segundo cérebro ficam exclusivos do privado do Luis', () => {
     expect(capabilitiesForChat(luis).has('finance')).toBe(true);
     expect(capabilitiesForChat(luis).has('knowledge')).toBe(true);
+    expect(capabilitiesForChat(luis).has('email_cleanup')).toBe(true);
     expect(capabilitiesForChat(esposa).has('finance')).toBe(false);
     expect(capabilitiesForChat(esposa).has('knowledge')).toBe(false);
+    expect(capabilitiesForChat(esposa).has('email_cleanup')).toBe(false);
     expect(capabilitiesForChat(grupo).has('finance')).toBe(false);
     expect(capabilitiesForChat(grupo).has('knowledge')).toBe(false);
+    expect(capabilitiesForChat(grupo).has('email_cleanup')).toBe(false);
   });
 
   it('ToolSet materializa a matriz de autorização', () => {
     expect(Object.keys(buildTools(luis))).toContain('finance_month_summary');
+    expect(Object.keys(buildTools(luis))).toContain('email_cleanup_protect');
     expect(Object.keys(buildTools(esposa))).not.toContain('finance_month_summary');
+    expect(Object.keys(buildTools(esposa))).not.toContain('email_cleanup_protect');
     expect(Object.keys(buildTools(grupo))).not.toContain('project_create');
   });
 

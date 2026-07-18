@@ -1,7 +1,7 @@
 import '../test-setup.js';
 import { describe, expect, it } from 'vitest';
 import type { InboxEmail } from '../lib/gmail.js';
-import { buildCleanupPrompt, runEmailCleanup, type CleanupState, type EmailCleanupDeps } from './email-cleanup.js';
+import { buildCleanupPrompt, isProtectedEmail, runEmailCleanup, type CleanupState, type EmailCleanupDeps } from './email-cleanup.js';
 
 const email = (id: string, over: Partial<InboxEmail> = {}): InboxEmail => ({
   id,
@@ -29,6 +29,7 @@ function deps(over: Partial<EmailCleanupDeps> = {}) {
       inserted.push(e as never);
       return { id: 'ev1' } as never;
     },
+    listProtections: async () => [],
     recall: async () => [],
     generate: async () => ({ verdicts: [] }) as never,
     now: () => new Date('2026-07-15T12:00:00Z'),
@@ -44,6 +45,20 @@ describe('buildCleanupPrompt', () => {
     expect(p).toContain('CATEGORY_PROMOTIONS');
     expect(p).toContain('promo@lojax.com');
     expect(p).toContain('Assunto m1');
+  });
+});
+
+describe('isProtectedEmail', () => {
+  it('protege por remetente, domínio, assunto ou termo geral sem diferenciar maiúsculas e acentos', () => {
+    const target = email('m1', {
+      from: 'Escola <avisos@colegio.com.br>',
+      subject: 'Atualização da matrícula',
+      snippet: 'Informação pedagógica',
+    });
+    expect(isProtectedEmail(target, [{ id: '1', matchOn: 'sender', matchValue: 'Escola', description: null }])).toBe(true);
+    expect(isProtectedEmail(target, [{ id: '2', matchOn: 'domain', matchValue: 'colegio.com.br', description: null }])).toBe(true);
+    expect(isProtectedEmail(target, [{ id: '3', matchOn: 'subject', matchValue: 'matricula', description: null }])).toBe(true);
+    expect(isProtectedEmail(target, [{ id: '4', matchOn: 'any', matchValue: 'pedagogica', description: null }])).toBe(true);
   });
 });
 
@@ -75,7 +90,7 @@ describe('runEmailCleanup', () => {
     expect(called).toBe(false);
   });
 
-  it('lixo vai para a lixeira com evento resolvido; importante vira evento queued; normal nada; cursor avança', async () => {
+  it('lixo vai para a lixeira com evento resolvido; importante e normal ficam na caixa; cursor avança', async () => {
     const { d, state, trashed, inserted } = deps({
       listNewInboxEmails: async () => [
         email('m1', { internalDate: 6_000 }),
@@ -94,19 +109,50 @@ describe('runEmailCleanup', () => {
     const out = await runEmailCleanup(d);
     expect(out).toEqual({ scanned: 3, trashed: 1, important: 1 });
     expect(trashed).toEqual(['m1']);
-    expect(inserted).toHaveLength(2);
+    expect(inserted).toHaveLength(1);
     expect(inserted[0]).toMatchObject({
       kind: 'email_trashed',
       dedupeKey: 'gmail:trash:m1',
       resolution: { decision: 'ignore', status: 'ignored', target: 'luis' },
     });
     expect(inserted[0].summary).toContain('Assunto m1');
-    expect(inserted[1]).toMatchObject({
-      kind: 'email_important',
-      dedupeKey: 'gmail:important:m2',
-      resolution: { decision: 'briefing', status: 'queued', target: 'luis' },
-    });
     expect(state.get('gmail_cleanup_state')).toEqual({ lastInternalDate: 8_000 });
+  });
+
+  it('proteção aprendida impede a lixeira antes da classificação e avança o cursor', async () => {
+    let generated = false;
+    const { d, state, trashed } = deps({
+      listNewInboxEmails: async () => [email('m1', { from: 'Escola <avisos@colegio.com.br>', internalDate: 9_000 })],
+      listProtections: async () => [
+        { id: 'p1', matchOn: 'domain', matchValue: 'colegio.com.br', description: 'E-mails da escola' },
+      ],
+      generate: async () => {
+        generated = true;
+        return { verdicts: [{ id: 'm1', verdict: 'lixo', reason: 'promoção' }] } as never;
+      },
+    });
+    expect(await runEmailCleanup(d)).toEqual({ scanned: 1, trashed: 0, important: 0 });
+    expect(generated).toBe(false);
+    expect(trashed).toEqual([]);
+    expect(state.get('gmail_cleanup_state')).toEqual({ lastInternalDate: 9_000 });
+  });
+
+  it('falha ao carregar proteções aborta sem classificar, descartar ou avançar o cursor', async () => {
+    let generated = false;
+    const { d, state, trashed } = deps({
+      listNewInboxEmails: async () => [email('m1', { internalDate: 9_000 })],
+      listProtections: async () => {
+        throw new Error('banco fora');
+      },
+      generate: async () => {
+        generated = true;
+        return { verdicts: [] } as never;
+      },
+    });
+    expect(await runEmailCleanup(d)).toEqual({ scanned: 1, trashed: 0, important: 0 });
+    expect(generated).toBe(false);
+    expect(trashed).toEqual([]);
+    expect(state.get('gmail_cleanup_state')).toEqual({ lastInternalDate: 1_000 });
   });
 
   it('estrela nunca vai para a lixeira, mesmo com veredito lixo', async () => {

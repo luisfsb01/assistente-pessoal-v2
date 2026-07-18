@@ -58,6 +58,9 @@ export function buildSystemPrompt(args: {
     capabilities.has('projects')
       ? '- Projetos: tools project_create, project_note, project_set_status, project_overview, project_task_add, project_task_move, project_task_list e project_archive.'
       : '',
+    capabilities.has('email_cleanup')
+      ? '- Proteção da caixa de entrada: use email_cleanup_protect quando Luis disser que um tipo, remetente, domínio ou assunto de e-mail não deve ir para a lixeira.'
+      : '',
   ].filter(Boolean);
 
   const toolRules = [
@@ -77,6 +80,9 @@ export function buildSystemPrompt(args: {
       : '',
     capabilities.has('finance')
       ? '- Finanças: códigos curtos como A001 usam finance_classify_transaction; consulte finance_list_categories se necessário.'
+      : '',
+    capabilities.has('email_cleanup')
+      ? '- Se Luis disser que determinado tipo de e-mail não deve ir para a lixeira, use email_cleanup_protect e confirme a regra. Não trate isso apenas como memória e não restaure e-mails antigos automaticamente.'
       : '',
   ].filter(Boolean);
 
