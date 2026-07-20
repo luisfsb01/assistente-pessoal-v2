@@ -335,12 +335,12 @@ export default function Transacoes() {
       const interval = `${result.from.split('-').reverse().join('/')} a ${result.to.split('-').reverse().join('/')}`
       if (result.imported === 0) {
         const recovered = result.autoClassified > 0
-          ? ` ${result.autoClassified} transação${result.autoClassified === 1 ? '' : 'ões'} que estava${result.autoClassified === 1 ? '' : 'm'} sem categoria foi${result.autoClassified === 1 ? '' : 'ram'} classificada${result.autoClassified === 1 ? '' : 's'}.`
+          ? ` ${result.autoClassified} transação${result.autoClassified === 1 ? '' : 'ões'} que estava${result.autoClassified === 1 ? '' : 'm'} sem categoria recebeu${result.autoClassified === 1 ? '' : 'ram'} sugestão e aguarda${result.autoClassified === 1 ? '' : 'm'} confirmação.`
           : ''
         setSyncMessage(`Tudo atualizado. Nenhuma nova transação encontrada de ${interval}.${recovered}`)
       } else {
         const classified = result.autoClassified > 0
-          ? ` ${result.autoClassified} classificada${result.autoClassified === 1 ? '' : 's'} automaticamente.`
+          ? ` ${result.autoClassified} recebeu${result.autoClassified === 1 ? '' : 'ram'} sugestão de categoria e aguarda${result.autoClassified === 1 ? '' : 'm'} confirmação.`
           : ''
         setSyncMessage(
           `${result.imported} nova${result.imported === 1 ? '' : 's'} transação${result.imported === 1 ? '' : 'ões'} importada${result.imported === 1 ? '' : 's'} (${interval}).${classified}`,

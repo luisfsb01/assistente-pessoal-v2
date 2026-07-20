@@ -8,10 +8,13 @@ describe('computeSyncRange', () => {
   it('dia seguinte ao último importado até ontem (recupera gaps)', () => {
     expect(computeSyncRange('2026-07-08', '2026-07-12')).toEqual({ from: '2026-07-09', to: '2026-07-12' });
   });
+  it('reconsulta dias recentes para capturar lançamentos tardios do cartão', () => {
+    expect(computeSyncRange('2026-07-11', '2026-07-12')).toEqual({ from: '2026-07-09', to: '2026-07-12' });
+  });
   it('respeita o teto de lookback', () => {
     expect(computeSyncRange('2026-01-01', '2026-07-12', 30)).toEqual({ from: '2026-06-12', to: '2026-07-12' });
   });
-  it('último importado hoje/futuro não gera from > to', () => {
-    expect(computeSyncRange('2026-07-12', '2026-07-12')).toEqual({ from: '2026-07-12', to: '2026-07-12' });
+  it('cursor hoje/futuro ainda reconsulta a janela recente sem gerar from > to', () => {
+    expect(computeSyncRange('2026-07-13', '2026-07-12')).toEqual({ from: '2026-07-09', to: '2026-07-12' });
   });
 });

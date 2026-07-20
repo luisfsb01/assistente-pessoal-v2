@@ -5,7 +5,6 @@ import {
   listCategories,
   listUncategorizedBankTransactions,
   setLastImportedDate,
-  setTransactionCategory,
   suggestTransactionCategory,
   upsertBankTransactions,
   type Category,
@@ -21,7 +20,6 @@ export type BankSyncDeps = {
   listUncategorizedBankTransactions: typeof listUncategorizedBankTransactions;
   listCategories: typeof listCategories;
   applyRules: typeof applyRules;
-  setTransactionCategory: typeof setTransactionCategory;
   suggestTransactionCategory: typeof suggestTransactionCategory;
   suggestCategoriesFor: (
     txs: Array<{ id: string; description: string; amount: number }>,
@@ -35,14 +33,13 @@ const defaultDeps: BankSyncDeps = {
   listUncategorizedBankTransactions,
   listCategories,
   applyRules,
-  setTransactionCategory,
   suggestTransactionCategory,
   suggestCategoriesFor: (txs, categories) => suggestCategoriesFor(txs, categories),
 };
 
-/** Importa transações do Banco MCP e classifica tudo que ainda estiver sem categoria.
- *  Regras aprendidas são confirmadas automaticamente; as demais recebem sugestão da IA
- *  e continuam pendentes para revisão humana. */
+/** Importa transações do Banco MCP e sugere categoria para tudo que estiver sem uma.
+ *  Tanto regras aprendidas quanto a IA apenas sugerem: toda transação bancária
+ *  continua pendente até a confirmação humana no Telegram. */
 export async function syncBankTransactions(
   fromDate: string,
   toDate: string,
@@ -63,7 +60,7 @@ export async function syncBankTransactions(
   let autoClassified = 0;
   const classifiedIds = new Set<string>();
   for (const [txId, categoryId] of ruleMatches) {
-    const ok = await deps.setTransactionCategory(txId, categoryId);
+    const ok = await deps.suggestTransactionCategory(txId, categoryId);
     if (ok) {
       autoClassified++;
       classifiedIds.add(txId);

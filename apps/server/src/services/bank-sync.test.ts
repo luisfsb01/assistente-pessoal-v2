@@ -36,15 +36,13 @@ describe('syncBankTransactions', () => {
       listUncategorizedBankTransactions: async () => [],
       listCategories: async () => [transport, leisure],
       applyRules: async () => new Map(),
-      setTransactionCategory: async () => true,
       suggestTransactionCategory: async () => true,
       suggestCategoriesFor: async () => new Map(),
       ...over,
     };
   }
 
-  it('aplica regras aprendidas e usa a IA no restante durante a atualização', async () => {
-    const confirmed: string[] = [];
+  it('aplica regras aprendidas e a IA como sugestões, sem confirmar automaticamente', async () => {
     const suggested: string[] = [];
     const rows = [tx('t1', 'UBER'), tx('t2', 'XYZ')];
     const deps: BankSyncDeps = {
@@ -56,10 +54,6 @@ describe('syncBankTransactions', () => {
       upsertBankTransactions: async () => rows,
       listUncategorizedBankTransactions: async () => rows,
       applyRules: async (items) => new Map(items.filter((i) => i.description === 'UBER').map((i) => [i.id, 'c1'])),
-      setTransactionCategory: async (id, catId) => {
-        confirmed.push(`${id}:${catId}`);
-        return true;
-      },
       suggestCategoriesFor: async (items) =>
         new Map(items.filter((item) => item.id === 't2').map((item) => [item.id, leisure])),
       suggestTransactionCategory: async (id, catId) => {
@@ -69,8 +63,7 @@ describe('syncBankTransactions', () => {
     };
     const r = await syncBankTransactions('2026-07-12', '2026-07-12', deps);
     expect(r).toEqual({ imported: 2, autoClassified: 2 });
-    expect(confirmed).toEqual(['t1:c1']);
-    expect(suggested).toEqual(['t2:c2']);
+    expect(suggested).toEqual(['t1:c1', 't2:c2']);
   });
 
   it('retoma transações antigas sem categoria mesmo quando nenhuma nova foi importada', async () => {
