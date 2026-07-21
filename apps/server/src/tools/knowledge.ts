@@ -25,6 +25,7 @@ const defaultDeps: KnowledgeToolDeps = {
 };
 
 const FAIL = 'Não consegui salvar/buscar no segundo cérebro agora. Tenta de novo em instantes.';
+const MAX_SUMMARY_CONTENT_CHARS = 12_000;
 
 /** Nome citável da nota: sem pasta, sem .md (vira [[nota]] no Obsidian). */
 export function noteNameFromPath(relPath: string): string {
@@ -35,7 +36,7 @@ export function buildKnowledgeTools(deps: KnowledgeToolDeps = defaultDeps): Tool
   return {
     knowledge_save: tool({
       description:
-        'Salva um link (artigo, vídeo do YouTube, podcast etc.) no segundo cérebro do casal. Use quando o usuário mandar uma URL pedindo para salvar/guardar. A nota opcional é o comentário do usuário sobre o conteúdo.',
+        'Salva um link (artigo, vídeo do YouTube, podcast etc.) no segundo cérebro do casal. Use quando o usuário mandar uma URL pedindo para salvar/guardar. A nota opcional é o comentário do usuário sobre o conteúdo. O retorno inclui conteúdo extraído para você resumir os principais pontos.',
       inputSchema: z.object({
         url: z.string().url().refine((raw) => ['http:', 'https:'].includes(new URL(raw).protocol), 'Use HTTP/HTTPS'),
         note: z.string().max(2_000).optional().describe('Comentário do usuário sobre o link, se houver'),
@@ -61,9 +62,12 @@ export function buildKnowledgeTools(deps: KnowledgeToolDeps = defaultDeps): Tool
             salvo: relPath,
             titulo: ex.title,
             tipo: ex.kind,
-            trecho: ex.markdown.slice(0, 600),
+            conteudo: ex.markdown.slice(0, MAX_SUMMARY_CONTENT_CHARS),
+            conteudo_truncado: ex.markdown.length > MAX_SUMMARY_CONTENT_CHARS,
           });
-        } catch {
+        } catch (err) {
+          // Não registra URL, conteúdo nem credenciais; só a fase e o erro técnico.
+          console.error('[knowledge] salvamento no vault falhou:', err);
           return FAIL;
         }
       },

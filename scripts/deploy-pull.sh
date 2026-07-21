@@ -19,6 +19,22 @@ fi
 
 REPO="${APV2_REPO:-$HOME/assistente-pessoal-v2}"
 LOG="${APV2_LOG:-$HOME/apv2-deploy.log}"
+APV2_VAULT_HOST_PATH="${APV2_VAULT_HOST_PATH:-/root/assistente-vault}"
+APV2_RUNTIME_UID="${APV2_RUNTIME_UID:-1000}"
+APV2_RUNTIME_GID="${APV2_RUNTIME_GID:-1000}"
+
+# Os valores podem ser sobrescritos no host, mas nunca permita que um erro de
+# configuração aplique chown recursivo a um diretório amplo ou como root.
+case "$APV2_VAULT_HOST_PATH" in
+  /*/assistente-vault) ;;
+  *) echo "APV2_VAULT_HOST_PATH inseguro: $APV2_VAULT_HOST_PATH" >&2; exit 1 ;;
+esac
+case "$APV2_RUNTIME_UID" in
+  0|*[!0-9]*) echo "APV2_RUNTIME_UID deve ser um ID numérico não-root" >&2; exit 1 ;;
+esac
+case "$APV2_RUNTIME_GID" in
+  0|*[!0-9]*) echo "APV2_RUNTIME_GID deve ser um ID numérico não-root" >&2; exit 1 ;;
+esac
 
 # Lock: nao sobrepoe execucoes (um build pesado pode passar de 30 min).
 exec 9>/tmp/apv2-deploy.lock
@@ -28,6 +44,12 @@ cd "$REPO"
 git fetch origin master --quiet
 LOCAL="$(git rev-parse HEAD)"
 REMOTE="$(git rev-parse origin/master)"
+
+# A imagem roda como `node` (UID/GID 1000). O vault pode ter sido criado pelo
+# container antigo como root; corrige isso em toda execução, inclusive quando
+# não há commit novo e o deploy sai no early exit abaixo.
+install -d -o "$APV2_RUNTIME_UID" -g "$APV2_RUNTIME_GID" -- "$APV2_VAULT_HOST_PATH"
+chown -R "$APV2_RUNTIME_UID:$APV2_RUNTIME_GID" -- "$APV2_VAULT_HOST_PATH"
 
 if [ "${FORCE:-}" != "1" ] && [ "$LOCAL" = "$REMOTE" ]; then
   exit 0  # nada novo

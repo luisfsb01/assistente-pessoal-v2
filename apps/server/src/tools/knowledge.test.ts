@@ -1,5 +1,5 @@
 import '../test-setup.js';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { buildKnowledgeTools, noteNameFromPath, type KnowledgeToolDeps } from './knowledge.js';
 
 function deps(over: Partial<KnowledgeToolDeps> = {}) {
@@ -43,7 +43,21 @@ describe('knowledge_save', () => {
     expect(indexed).toEqual(['Sources/2026-07-15-titulo-x.md']);
     expect(out.titulo).toBe('Título X');
     expect(out.tipo).toBe('article');
-    expect(out.trecho.length).toBeLessThanOrEqual(600);
+    expect(out.conteudo).toBe('corpo do artigo '.repeat(100));
+    expect(out.conteudo_truncado).toBe(false);
+  });
+
+  it('limita o conteúdo devolvido ao agente sem perder o início do artigo', async () => {
+    const markdown = `começo-${'x'.repeat(20_000)}`;
+    const { d } = deps({
+      extract: async () => ({ kind: 'article', title: 'Longo', markdown }),
+    });
+
+    const out = JSON.parse(await run(buildKnowledgeTools(d) as never, 'knowledge_save', { url: 'https://x.com/longo' }));
+
+    expect(out.conteudo).toHaveLength(12_000);
+    expect(out.conteudo).toMatch(/^começo-/);
+    expect(out.conteudo_truncado).toBe(true);
   });
 
   it('falha do índice não perde a nota (ainda retorna salvo)', async () => {
@@ -57,6 +71,7 @@ describe('knowledge_save', () => {
   });
 
   it('falha total responde mensagem de erro amigável', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
     const { d } = deps({
       writeSourceNote: async () => {
         throw new Error('disco cheio');
@@ -64,6 +79,8 @@ describe('knowledge_save', () => {
     });
     const out = await run(buildKnowledgeTools(d) as never, 'knowledge_save', { url: 'https://x.com/a' });
     expect(out).toContain('Não consegui');
+    expect(log).toHaveBeenCalledWith('[knowledge] salvamento no vault falhou:', expect.any(Error));
+    log.mockRestore();
   });
 });
 
