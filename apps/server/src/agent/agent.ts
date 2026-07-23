@@ -26,6 +26,7 @@ import {
   type TaskRecurrenceFlow,
 } from './task-recurrence-flow.js';
 import { calendarToolIntent } from './calendar-tool-intent.js';
+import { handleFinanceReviewReply } from '../services/finance-review-reply.js';
 
 export type AgentToolContext = {
   taskRecurrence: TaskRecurrenceFlow;
@@ -39,6 +40,7 @@ export type AgentDeps = {
   recall: (text: string, subjects: MemorySubject[]) => Promise<Memory[]>;
   generate: typeof generateAgentText;
   buildTools: (identity: ChatIdentity, context?: AgentToolContext) => ToolSet;
+  handleFinanceReviewReply?: (text: string) => Promise<string | null>;
   onBudgetAlert?: (status: BudgetStatus, monthCostBrl: number) => Promise<void>;
 };
 
@@ -121,6 +123,17 @@ export async function handleMessage(
   if (!identity) return null;
 
   await deps.saveMessage({ chatId: msg.chatId, role: 'user', content: msg.text });
+
+  // Confirmacoes enviadas no formato da revisao diaria sao comandos de
+  // persistencia. Trata-las antes do LLM impede uma resposta afirmativa sem
+  // que a categoria/status tenham sido efetivamente gravados.
+  if (canAccess(identity, 'finance')) {
+    const financeReply = await (deps.handleFinanceReviewReply ?? handleFinanceReviewReply)(msg.text);
+    if (financeReply) {
+      await deps.saveMessage({ chatId: msg.chatId, role: 'assistant', content: financeReply });
+      return financeReply;
+    }
+  }
 
   const [history, memories] = await Promise.all([
     deps.getRecentMessages(msg.chatId, 20),

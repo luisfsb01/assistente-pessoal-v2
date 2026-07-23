@@ -127,6 +127,40 @@ describe('handleMessage', () => {
     expect(buildToolsCalls).toEqual([luis]);
   });
 
+  it('persiste respostas estruturadas da revisao financeira sem chamar o modelo', async () => {
+    const { deps, saved } = makeDeps(luis);
+    let generated = false;
+    deps.generate = async () => {
+      generated = true;
+      return 'nao deveria executar';
+    };
+    deps.handleFinanceReviewReply = async (text) =>
+      text === 'A045 - Compras Necessarias' ? 'Pronto — registrei A045.' : null;
+
+    await expect(handleMessage({ chatId: 1, text: 'A045 - Compras Necessarias' }, deps)).resolves.toBe(
+      'Pronto — registrei A045.',
+    );
+    expect(generated).toBe(false);
+    expect(saved).toEqual([
+      { chatId: 1, role: 'user', content: 'A045 - Compras Necessarias' },
+      { chatId: 1, role: 'assistant', content: 'Pronto — registrei A045.' },
+    ]);
+  });
+
+  it('nao intercepta classificacao financeira em chat sem acesso a financas', async () => {
+    const esposa: ChatIdentity = { chatId: 2, kind: 'private', userName: 'Esposa', subject: 'esposa' };
+    const { deps } = makeDeps(esposa);
+    let intercepted = false;
+    deps.handleFinanceReviewReply = async () => {
+      intercepted = true;
+      return 'nao deveria executar';
+    };
+    deps.generate = async () => 'Resposta normal.';
+
+    await handleMessage({ chatId: 2, text: 'A045 - Compras Necessarias' }, deps);
+    expect(intercepted).toBe(false);
+  });
+
   it('encaminha o senderId para validar o remetente do grupo', async () => {
     const { deps, identityCalls } = makeDeps(luis);
     await handleMessage({ chatId: 1, senderId: 42, text: 'qual meu nome?' }, deps);
