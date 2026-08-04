@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   formatDailyBriefing,
   isEmptyBriefing,
+  runCoupleBriefing,
   runDailyBriefing,
   type BriefingContext,
   type BriefingDeps,
@@ -101,7 +102,7 @@ describe('runDailyBriefing', () => {
     } as never;
   }
 
-  it('inclui apenas tarefas com prazo no dia, não atrasadas ou futuras', async () => {
+  it('inclui tarefas abertas com prazo até hoje, mas não futuras', async () => {
     const sent: Array<[number, string]> = [];
     const d = deps({
       listTasks: async (userId) =>
@@ -115,8 +116,8 @@ describe('runDailyBriefing', () => {
     });
     await runDailyBriefing(async (chatId, text) => void sent.push([chatId, text]), d);
     expect(sent).toHaveLength(1);
+    expect(sent[0][1]).toContain('Atrasada');
     expect(sent[0][1]).toContain('De hoje');
-    expect(sent[0][1]).not.toContain('Atrasada');
     expect(sent[0][1]).not.toContain('Futura');
   });
 
@@ -167,5 +168,52 @@ describe('runDailyBriefing', () => {
     await runDailyBriefing(async (_chatId, text) => void sent.push(text), d);
     expect(sent[0]).toContain('• Academia: 1/3 nesta semana');
     expect(sent[0]).not.toContain('Vale');
+  });
+});
+
+describe('runCoupleBriefing', () => {
+  it('inclui o fim de semana atual e a semana seguinte no consolidado do grupo', async () => {
+    const sent: Array<[number, string]> = [];
+    const agendaCalls: Array<[string, string, string]> = [];
+    const deps: BriefingDeps = {
+      getUserBySubject: async (subject) => ({
+        id: subject === 'luis' ? 'u1' : 'u2',
+        name: subject === 'luis' ? 'Luis' : 'Esposa',
+        calendarId: subject === 'luis' ? 'cal-luis' : 'cal-esposa',
+      }),
+      getSubjectChatId: async () => null,
+      getGroupChatId: async () => 999,
+      listAgenda: async (calendarId, fromDate, toDate) => {
+        agendaCalls.push([calendarId, fromDate, toDate]);
+        if (calendarId !== 'cal-luis' || toDate < '2026-08-03') return [];
+        return [
+          {
+            id: 'e1',
+            title: 'Compromisso da semana',
+            start: '2026-08-03T10:00:00-03:00',
+            end: '2026-08-03T11:00:00-03:00',
+            allDay: false,
+          },
+        ];
+      },
+      listTasks: async () => [],
+      listProjectTasksDueOn: async () => [],
+      listCommitments: async () => [],
+      listQueuedForTarget: async () => [],
+      listActiveHabits: async () => [],
+      listHabitCheckins: async () => [],
+      markBriefed: async () => undefined,
+      todayIso: () => '2026-08-01',
+    };
+
+    await runCoupleBriefing(async (chatId, text) => void sent.push([chatId, text]), deps);
+
+    expect(agendaCalls).toEqual([
+      ['cal-luis', '2026-08-01', '2026-08-09'],
+      ['cal-esposa', '2026-08-01', '2026-08-09'],
+    ]);
+    expect(sent).toHaveLength(1);
+    expect(sent[0][0]).toBe(999);
+    expect(sent[0][1]).toContain('Compromisso da semana (Luis)');
   });
 });

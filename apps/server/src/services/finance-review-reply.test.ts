@@ -66,6 +66,15 @@ describe('handleFinanceReviewReply', () => {
     );
   });
 
+  it('aceita codigo sem o zero a esquerda usado na mensagem de revisao', async () => {
+    const { deps, calls } = makeDeps();
+
+    await expect(handleFinanceReviewReply('A45 - Compras Necessarias', deps)).resolves.toBe(
+      'Pronto \u2014 registrei A045.',
+    );
+    expect(calls).toEqual(['set:t45:c1', 'learn:LOJA TESTE 45:c1']);
+  });
+
   it('nao altera nenhuma transacao quando um codigo do lote nao existe', async () => {
     const { deps, calls } = makeDeps();
     await expect(handleFinanceReviewReply('A045 - Compras Necessarias\nA999 - Compras Necessarias', deps)).resolves.toBe(

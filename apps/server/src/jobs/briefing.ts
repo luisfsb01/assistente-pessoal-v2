@@ -111,7 +111,9 @@ async function contextFor(subject: 'luis' | 'esposa', deps: BriefingDeps): Promi
   const dayOfMonth = Number(today.slice(8, 10));
 
   const agenda = user.calendarId ? await deps.listAgenda(user.calendarId, today, today).catch(() => []) : [];
-  const tasks = (await deps.listTasks(user.id, 'open')).filter((t) => t.dueDate === today);
+  const tasks = (await deps.listTasks(user.id, 'open')).filter(
+    (t) => t.dueDate !== null && t.dueDate <= today,
+  );
   const projectActions = await deps.listProjectTasksDueOn(user.id, today).catch(() => []);
   const queuedEvents = await deps.listQueuedForTarget(subject);
   const commitmentsToday =
@@ -163,7 +165,7 @@ export async function runDailyBriefing(
   }
 }
 
-/** Visão do casal — sábados no grupo: fim de semana dos dois + mês + eventos do grupo. */
+/** Visão do casal — sábados no grupo: fim de semana atual + semana seguinte dos dois. */
 export async function runCoupleBriefing(
   send: (chatId: number, text: string) => Promise<void>,
   deps: BriefingDeps = defaultBriefingDeps(),
@@ -172,13 +174,13 @@ export async function runCoupleBriefing(
     const chatId = await deps.getGroupChatId();
     if (chatId === null) return;
     const today = deps.todayIso();
-    const sunday = addDays(today, 1);
+    const endOfNextWeek = addDays(today, 8);
 
     const agenda: CalEvent[] = [];
     for (const subject of ['luis', 'esposa'] as const) {
       const user = await deps.getUserBySubject(subject);
       if (!user?.calendarId) continue;
-      const events = await deps.listAgenda(user.calendarId, today, sunday).catch(() => [] as CalEvent[]);
+      const events = await deps.listAgenda(user.calendarId, today, endOfNextWeek).catch(() => [] as CalEvent[]);
       agenda.push(...events.map((e) => ({ ...e, title: `${e.title} (${user.name})` })));
     }
     const queuedEvents = await deps.listQueuedForTarget('grupo');

@@ -25,8 +25,15 @@ const defaultDeps: FinanceReviewReplyDeps = {
 
 // O formato aparece literalmente nas mensagens da revisao diaria. Mantemos a
 // deteccao estrita para que conversas comuns continuem no fluxo do agente.
-const REVIEW_LINE = /^\s*([a-z]\d{3,})\s*(?:-|\u2013|\u2014|=|e|\u00e9)\s*(\S(?:.*\S)?)\s*$/i;
+// O Telegram exibe A065, mas e natural responder A65. Aceitamos as duas
+// formas e sempre consultamos o codigo canonico armazenado no banco.
+const REVIEW_LINE = /^\s*([a-z]\d{1,3})\s*(?:-|\u2013|\u2014|=|e|\u00e9)\s*(\S(?:.*\S)?)\s*$/i;
 const MAX_CLASSIFICATIONS = 20;
+
+function normalizeReviewCode(code: string): string {
+  const [, letter, digits] = code.match(/^([a-z])(\d{1,3})$/i)!;
+  return `${letter.toUpperCase()}${digits.padStart(3, '0')}`;
+}
 
 function parseReviewClassifications(text: string): ReviewClassification[] | null {
   const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
@@ -37,7 +44,7 @@ function parseReviewClassifications(text: string): ReviewClassification[] | null
   for (const line of lines) {
     const match = line.match(REVIEW_LINE);
     if (!match) return null;
-    const code = match[1].toUpperCase();
+    const code = normalizeReviewCode(match[1]);
     if (seenCodes.has(code)) return null;
     seenCodes.add(code);
     classifications.push({ code, categoryName: match[2].trim() });
