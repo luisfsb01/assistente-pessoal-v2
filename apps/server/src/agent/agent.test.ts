@@ -161,6 +161,38 @@ describe('handleMessage', () => {
     expect(intercepted).toBe(false);
   });
 
+  it('audita reclamacao financeira pelo historico sem chamar o modelo', async () => {
+    const { deps, saved } = makeDeps(luis);
+    let generated = false;
+    let receivedHistory: { role: ChatRole; content: string }[] = [];
+    deps.getRecentMessages = async () => [
+      { role: 'user', content: 'A045 - Compras Necessárias' },
+      { role: 'assistant', content: 'Pronto — registrei A045.' },
+    ];
+    deps.handleFinanceClassificationComplaint = async (_text, history) => {
+      receivedHistory = history;
+      return 'Corrigi agora e confirmei no banco.';
+    };
+    deps.generate = async () => {
+      generated = true;
+      return 'nao deveria executar';
+    };
+
+    const reply = await handleMessage({
+      chatId: 1,
+      text: 'Ontem pedi para classificar e não foi classificado.',
+    }, deps);
+
+    expect(reply).toBe('Corrigi agora e confirmei no banco.');
+    expect(generated).toBe(false);
+    expect(receivedHistory.at(0)?.content).toBe('A045 - Compras Necessárias');
+    expect(saved.at(-1)).toEqual({
+      chatId: 1,
+      role: 'assistant',
+      content: 'Corrigi agora e confirmei no banco.',
+    });
+  });
+
   it('encaminha o senderId para validar o remetente do grupo', async () => {
     const { deps, identityCalls } = makeDeps(luis);
     await handleMessage({ chatId: 1, senderId: 42, text: 'qual meu nome?' }, deps);

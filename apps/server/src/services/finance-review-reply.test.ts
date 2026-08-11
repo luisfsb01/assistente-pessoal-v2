@@ -35,9 +35,16 @@ function makeDeps(): { deps: FinanceReviewReplyDeps; calls: string[] } {
     calls,
     deps: {
       getTransactionByReviewCode: async (code) => transactions.get(code) ?? null,
+      getTransactionById: async (id) =>
+        [...transactions.values()].find((item) => item.id === id) ?? null,
       getCategoryByName: async (name) => categories.get(name.toLocaleLowerCase('pt-BR')) ?? null,
       setTransactionCategory: async (transactionId, categoryId) => {
         calls.push(`set:${transactionId}:${categoryId}`);
+        const item = [...transactions.values()].find((candidate) => candidate.id === transactionId);
+        if (item) {
+          item.category_id = categoryId;
+          item.status = 'confirmed';
+        }
         return true;
       },
       learnRule: async (description, categoryId) => void calls.push(`learn:${description}:${categoryId}`),
@@ -86,5 +93,18 @@ describe('handleFinanceReviewReply', () => {
   it('deixa mensagens comuns seguirem para o agente', async () => {
     const { deps } = makeDeps();
     await expect(handleFinanceReviewReply('Pode classificar A045 como compras?', deps)).resolves.toBeNull();
+  });
+
+  it('nao afirma sucesso quando a releitura nao confirma a gravacao', async () => {
+    const { deps, calls } = makeDeps();
+    deps.setTransactionCategory = async (transactionId, categoryId) => {
+      calls.push(`set:${transactionId}:${categoryId}`);
+      return true;
+    };
+
+    await expect(handleFinanceReviewReply('A045 - Compras Necessarias', deps)).resolves.toBe(
+      'Não consegui salvar essas classificações agora. Tente novamente.',
+    );
+    expect(calls).toEqual(['set:t45:c1']);
   });
 });

@@ -27,6 +27,7 @@ import {
 } from './task-recurrence-flow.js';
 import { calendarToolIntent } from './calendar-tool-intent.js';
 import { handleFinanceReviewReply } from '../services/finance-review-reply.js';
+import { handleFinanceClassificationComplaint } from '../services/finance-classification-audit.js';
 
 export type AgentToolContext = {
   taskRecurrence: TaskRecurrenceFlow;
@@ -41,6 +42,10 @@ export type AgentDeps = {
   generate: typeof generateAgentText;
   buildTools: (identity: ChatIdentity, context?: AgentToolContext) => ToolSet;
   handleFinanceReviewReply?: (text: string) => Promise<string | null>;
+  handleFinanceClassificationComplaint?: (
+    text: string,
+    history: { role: ChatRole; content: string }[],
+  ) => Promise<string | null>;
   onBudgetAlert?: (status: BudgetStatus, monthCostBrl: number) => Promise<void>;
 };
 
@@ -111,6 +116,7 @@ export function defaultAgentDeps(
     recall: recallMemories,
     generate: generateAgentText,
     buildTools,
+    handleFinanceClassificationComplaint,
     onBudgetAlert,
   };
 }
@@ -135,10 +141,19 @@ export async function handleMessage(
     }
   }
 
-  const [history, memories] = await Promise.all([
-    deps.getRecentMessages(msg.chatId, 20),
-    deps.recall(msg.text, subjectsForChat(identity)),
-  ]);
+  const history = await deps.getRecentMessages(msg.chatId, 20);
+
+  if (canAccess(identity, 'finance')) {
+    const auditReply = await (
+      deps.handleFinanceClassificationComplaint ?? handleFinanceClassificationComplaint
+    )(msg.text, history);
+    if (auditReply) {
+      await deps.saveMessage({ chatId: msg.chatId, role: 'assistant', content: auditReply });
+      return auditReply;
+    }
+  }
+
+  const memories = await deps.recall(msg.text, subjectsForChat(identity));
 
   // histórico já inclui a mensagem recém-salva em produção; em fakes pode não incluir —
   // garante que a última mensagem é a atual sem duplicar

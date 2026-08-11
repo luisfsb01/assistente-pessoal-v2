@@ -21,6 +21,13 @@ export class TransactionNotFoundError extends Error {
   }
 }
 
+export class TransactionVerificationError extends Error {
+  constructor() {
+    super('A reclassificação não foi confirmada no banco.');
+    this.name = 'TransactionVerificationError';
+  }
+}
+
 /** Confirma a nova categoria e transforma a correção humana na regra prioritária. */
 export async function reclassifyTransactions(
   items: ReclassificationItem[],
@@ -33,6 +40,10 @@ export async function reclassifyTransactions(
     if (!transaction) throw new TransactionNotFoundError();
     if (!(await deps.setTransactionCategory(transaction.id, item.categoryId))) {
       throw new TransactionNotFoundError();
+    }
+    const saved = await deps.getTransactionById(transaction.id);
+    if (saved?.category_id !== item.categoryId || saved.status !== 'confirmed') {
+      throw new TransactionVerificationError();
     }
     updated++;
     await deps.learnRule(transaction.description, item.categoryId);

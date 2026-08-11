@@ -91,6 +91,8 @@ describe('finance_classify_transaction', () => {
     const learned: string[] = [];
     const d = deps({
       getTransactionByReviewCode: async (code) => (code === 'A001' ? tx({ id: 'tz', description: 'CEMIG' }) : null),
+      getTransactionById: async (id) =>
+        id === 'tz' ? tx({ id: 'tz', description: 'CEMIG', category_id: 's1', status: 'confirmed' }) : null,
       learnRule: async (desc, catId) => {
         learned.push(`${desc}:${catId}`);
       },
@@ -105,6 +107,18 @@ describe('finance_classify_transaction', () => {
     const out = await run(tools, 'finance_classify_transaction', { code: 'Z999', category_name: 'Casa' });
     expect(out).toContain('Z999');
   });
+  it('nao afirma sucesso quando a releitura diverge', async () => {
+    let learned = false;
+    const tools = buildFinanceTools(deps({
+      getTransactionByReviewCode: async () => tx({ id: 'tz', description: 'CEMIG' }),
+      getTransactionById: async () => tx({ id: 'tz', category_id: null, status: 'pending_review' }),
+      learnRule: async () => void (learned = true),
+    }));
+
+    const out = await run(tools, 'finance_classify_transaction', { code: 'A001', category_name: 'Energia' });
+    expect(out).toContain('não foi confirmada no banco');
+    expect(learned).toBe(false);
+  });
 });
 
 describe('finance_confirm_transaction', () => {
@@ -112,6 +126,7 @@ describe('finance_confirm_transaction', () => {
     const learned: string[] = [];
     const d = deps({
       getTransactionByReviewCode: async () => tx({ id: 'tz', description: 'CEMIG', category_id: 's1', status: 'pending_review' }),
+      getTransactionById: async () => tx({ id: 'tz', description: 'CEMIG', category_id: 's1', status: 'confirmed' }),
       learnRule: async (desc, catId) => {
         learned.push(`${desc}:${catId}`);
       },

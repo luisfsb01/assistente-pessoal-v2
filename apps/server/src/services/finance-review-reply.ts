@@ -1,5 +1,6 @@
 import {
   getCategoryByName,
+  getTransactionById,
   getTransactionByReviewCode,
   learnRule,
   setTransactionCategory,
@@ -7,10 +8,11 @@ import {
   type Transaction,
 } from '../db/finance.js';
 
-type ReviewClassification = { code: string; categoryName: string };
+export type ReviewClassification = { code: string; categoryName: string };
 
 export type FinanceReviewReplyDeps = {
   getTransactionByReviewCode: (code: string) => Promise<Transaction | null>;
+  getTransactionById: (id: string) => Promise<Transaction | null>;
   getCategoryByName: (name: string) => Promise<Category | null>;
   setTransactionCategory: (transactionId: string, categoryId: string) => Promise<boolean>;
   learnRule: (description: string, categoryId: string) => Promise<void>;
@@ -18,6 +20,7 @@ export type FinanceReviewReplyDeps = {
 
 const defaultDeps: FinanceReviewReplyDeps = {
   getTransactionByReviewCode,
+  getTransactionById,
   getCategoryByName,
   setTransactionCategory,
   learnRule,
@@ -30,12 +33,12 @@ const defaultDeps: FinanceReviewReplyDeps = {
 const REVIEW_LINE = /^\s*([a-z]\d{1,3})\s*(?:-|\u2013|\u2014|=|e|\u00e9)\s*(\S(?:.*\S)?)\s*$/i;
 const MAX_CLASSIFICATIONS = 20;
 
-function normalizeReviewCode(code: string): string {
+export function normalizeReviewCode(code: string): string {
   const [, letter, digits] = code.match(/^([a-z])(\d{1,3})$/i)!;
   return `${letter.toUpperCase()}${digits.padStart(3, '0')}`;
 }
 
-function parseReviewClassifications(text: string): ReviewClassification[] | null {
+export function parseReviewClassifications(text: string): ReviewClassification[] | null {
   const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   if (lines.length === 0 || lines.length > MAX_CLASSIFICATIONS) return null;
 
@@ -88,6 +91,11 @@ export async function handleFinanceReviewReply(
     const category = categories[index]!;
     try {
       if (await deps.setTransactionCategory(transaction.id, category.id)) {
+        const saved = await deps.getTransactionById(transaction.id);
+        if (saved?.category_id !== category.id || saved.status !== 'confirmed') {
+          console.error('[finance-review-reply] gravacao nao foi confirmada na releitura:', transaction.id);
+          continue;
+        }
         persisted.push(items[index]);
         // O aprendizado nao pode invalidar uma classificacao que ja foi salva.
         await deps.learnRule(transaction.description, category.id).catch((err) => {

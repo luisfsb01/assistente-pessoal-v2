@@ -4,6 +4,7 @@ import type { Transaction } from '../db/finance.js';
 import {
   reclassifyTransactions,
   TransactionNotFoundError,
+  TransactionVerificationError,
   type ReclassificationDeps,
 } from './transaction-reclassification.js';
 
@@ -30,6 +31,11 @@ describe('reclassifyTransactions', () => {
       getTransactionById: async (id) => rows.get(id) ?? null,
       setTransactionCategory: async (id, categoryId) => {
         calls.push(`set:${id}:${categoryId}`);
+        const row = rows.get(id);
+        if (row) {
+          row.category_id = categoryId;
+          row.status = 'confirmed';
+        }
         return true;
       },
       learnRule: async (description, categoryId) => void calls.push(`learn:${description}:${categoryId}`),
@@ -60,6 +66,19 @@ describe('reclassifyTransactions', () => {
         learnRule: async () => void (learned = true),
       }),
     ).rejects.toBeInstanceOf(TransactionNotFoundError);
+    expect(learned).toBe(false);
+  });
+
+  it('recusa sucesso quando a releitura nao confirma a categoria', async () => {
+    let learned = false;
+    const row = transaction('t1', 'UBER TRIP 123');
+    await expect(
+      reclassifyTransactions([{ id: 't1', categoryId: 'c1' }], {
+        getTransactionById: async () => row,
+        setTransactionCategory: async () => true,
+        learnRule: async () => void (learned = true),
+      }),
+    ).rejects.toBeInstanceOf(TransactionVerificationError);
     expect(learned).toBe(false);
   });
 });

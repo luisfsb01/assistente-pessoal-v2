@@ -205,6 +205,10 @@ export function buildFinanceTools(deps: FinanceToolDeps = defaultDeps): ToolSet 
           if (!cat) return `A categoria "${category_name}" não existe — use finance_list_categories para ver as opções.`;
           const ok = await deps.setTransactionCategory(tx.id, cat.id);
           if (!ok) return 'Transação não encontrada.';
+          const saved = await deps.getTransactionById(tx.id);
+          if (saved?.category_id !== cat.id || saved.status !== 'confirmed') {
+            return 'A alteração não foi confirmada no banco. Não marquei a transação como classificada.';
+          }
           try {
             await deps.learnRule(tx.description, cat.id);
           } catch (err) {
@@ -231,6 +235,10 @@ export function buildFinanceTools(deps: FinanceToolDeps = defaultDeps): ToolSet 
           if (!tx.category_id) return 'Essa transação ainda não tem categoria sugerida — use finance_classify_transaction com a categoria.';
           const ok = await deps.confirmTransaction(tx.id);
           if (!ok) return 'Transação não encontrada.';
+          const saved = await deps.getTransactionById(tx.id);
+          if (saved?.category_id !== tx.category_id || saved.status !== 'confirmed') {
+            return 'A confirmação não foi persistida no banco. Não marquei a transação como concluída.';
+          }
           try {
             await deps.learnRule(tx.description, tx.category_id);
           } catch (err) {
