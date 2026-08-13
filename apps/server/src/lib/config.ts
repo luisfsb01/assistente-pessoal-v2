@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 const optionalNonEmpty = z.preprocess((value) => value === '' ? undefined : value, z.string().min(1).optional());
 const optionalUrl = z.preprocess((value) => value === '' ? undefined : value, z.string().url().optional());
+const optionalSecret = z.preprocess((value) => value === '' ? undefined : value, z.string().min(32).optional());
 
 const schema = z.object({
   TELEGRAM_TOKEN: z.string().min(1),
@@ -22,6 +23,7 @@ const schema = z.object({
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   GOOGLE_REFRESH_TOKEN: z.string().optional(),
   BANCO_MCP_TOKEN: z.string().default(''),
+  HERMES_MCP_TOKEN: optionalSecret,
   VAULT_PATH: z.string().default('./data/vault'),
 });
 

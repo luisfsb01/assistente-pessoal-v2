@@ -290,6 +290,16 @@ validada no VPS.
    tarefa, o banco cria de forma idempotente a próxima ocorrência, respeitando
    a frequência e a data final configuradas.
 
+## 15. Integração com o Hermes
+
+1. Execute `supabase/migrations/0014_hermes_operations.sql` no SQL Editor.
+2. Configure uma chave aleatória de pelo menos 32 caracteres em
+   `HERMES_MCP_TOKEN` no `.env` da VPS.
+3. Faça o deploy do V2 e siga `docs/hermes/INSTALACAO.md` para cadastrar a
+   ponte MCP e a skill no Hermes.
+4. O Hermes usa um bot próprio; mantenha o bot atual do V2 ligado durante o
+   piloto. Não reutilize o mesmo token do Telegram nos dois processos.
+
 ## Notas
 
 - O web app da v1 sai do ar junto com a v1; ele volta servido pela v2

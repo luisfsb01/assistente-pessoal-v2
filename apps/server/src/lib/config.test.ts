@@ -35,6 +35,12 @@ describe('loadConfig', () => {
     expect(cfg.GOOGLE_CLIENT_ID).toBeUndefined();
   });
 
+  it('exige uma chave forte quando a ponte do Hermes é habilitada', () => {
+    expect(() => loadConfig({ ...minimal, HERMES_MCP_TOKEN: 'curta' } as NodeJS.ProcessEnv)).toThrow();
+    const cfg = loadConfig({ ...minimal, HERMES_MCP_TOKEN: 'a'.repeat(64) } as NodeJS.ProcessEnv);
+    expect(cfg.HERMES_MCP_TOKEN).toHaveLength(64);
+  });
+
   it('aceita endpoint LLM compatível e trata string vazia como ausente', () => {
     const cfg = loadConfig({
       ...minimal,

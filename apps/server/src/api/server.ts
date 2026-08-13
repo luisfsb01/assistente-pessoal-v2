@@ -20,6 +20,7 @@ import {
   TransactionNotFoundError,
   type ReclassificationItem,
 } from '../services/transaction-reclassification.js';
+import { createMcpBridge, type McpBridge } from '../mcp/handler.js';
 
 /**
  * Resolve o caminho do build da SPA (`apps/web/dist`).
@@ -69,7 +70,7 @@ export function defaultApiDeps(): ApiDeps {
 export function createApp(
   webDistDir: string,
   deps: ApiDeps = defaultApiDeps(),
-  security: { supabaseUrl?: string } = {},
+  security: { supabaseUrl?: string; mcpBridge?: McpBridge } = {},
 ): Hono {
   const app = new Hono();
   const preAuthLimiter = new FixedWindowRateLimiter(600, 60_000);
@@ -103,6 +104,20 @@ export function createApp(
   }));
 
   app.get('/health', (c) => c.json({ ok: true }));
+
+  // Ponte privada do Hermes. A autenticação acontece dentro da ponte antes
+  // que qualquer mensagem MCP seja interpretada ou ferramenta seja listada.
+  if (security.mcpBridge) {
+    app.use('/mcp', bodyLimit({
+      maxSize: 64 * 1024,
+      onError: (c) => c.json({ error: 'corpo da requisição muito grande' }, 413),
+    }));
+    app.all('/mcp', async (c) => {
+      const response = await security.mcpBridge!.fetch(c.req.raw);
+      response.headers.set('Cache-Control', 'no-store');
+      return response;
+    });
+  }
 
   // API do web (Fase 8): autenticada pelo access token do Supabase Auth
   app.use('/api/*', async (c, next) => {
@@ -202,7 +217,10 @@ export function startWebServer(cfg: Config): void {
     console.warn(`[web] build em ${webDistDir} não encontrado; iniciando somente a API.`);
   }
 
-  const app = createApp(webDistDir, defaultApiDeps(), { supabaseUrl: cfg.SUPABASE_URL });
+  const app = createApp(webDistDir, defaultApiDeps(), {
+    supabaseUrl: cfg.SUPABASE_URL,
+    mcpBridge: createMcpBridge(cfg.HERMES_MCP_TOKEN),
+  });
 
   serve({ fetch: app.fetch, port: cfg.PORT }, (info) => {
     const service = hasWebBuild ? 'dashboard' : 'API';

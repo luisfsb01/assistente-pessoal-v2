@@ -55,6 +55,23 @@ describe('createApp', () => {
     expect(await res.text()).toContain('spa-fallback');
   });
 
+  it('encaminha /mcp para a ponte configurada e desabilita cache', async () => {
+    const calls: Request[] = [];
+    const app = createApp(dir, undefined, {
+      mcpBridge: {
+        fetch: async (request) => {
+          calls.push(request);
+          return Response.json({ ok: true, bridge: 'mcp' });
+        },
+      },
+    });
+    const res = await app.request('/mcp', { method: 'POST', body: '{}' });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, bridge: 'mcp' });
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    expect(calls).toHaveLength(1);
+  });
+
   function fakeDeps(over: Partial<ApiDeps> = {}): ApiDeps {
     return {
       isValidToken: async (t) => t === 'token-bom',

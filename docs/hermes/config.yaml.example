@@ -1,0 +1,21 @@
+# Acrescente este bloco a ~/.hermes/config.yaml na VPS.
+mcp_servers:
+  assistente_v2:
+    url: "https://assistente.aiexcelencia.com/mcp"
+    headers:
+      Authorization: "Bearer ${ASSISTENTE_V2_MCP_TOKEN}"
+    enabled: true
+    timeout: 60
+    connect_timeout: 15
+    supports_parallel_tool_calls: false
+    trust: full
+    tools:
+      include:
+        - finance_list_categories
+        - finance_list_transactions
+        - finance_get_transaction
+        - finance_reclassify_transaction
+        - finance_sync_bank
+        - operations_list_receipts
+      resources: false
+      prompts: false
