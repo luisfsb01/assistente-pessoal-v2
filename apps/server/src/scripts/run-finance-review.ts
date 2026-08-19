@@ -2,7 +2,9 @@
 import { Bot } from 'grammy';
 import { getConfig } from '../lib/config.js';
 import { runFinanceReview } from '../jobs/finance-review.js';
+import { telegramDeliveryConfig } from '../lib/telegram-delivery.js';
 
-const bot = new Bot(getConfig().TELEGRAM_TOKEN);
-await runFinanceReview(bot);
+const delivery = telegramDeliveryConfig(getConfig());
+const bot = new Bot(delivery.token);
+await runFinanceReview(bot, { interactionMode: delivery.interactionMode });
 console.log('revisão financeira executada');

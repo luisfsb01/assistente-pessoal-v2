@@ -28,14 +28,22 @@ export function formatReviewLine(
   tx: { occurred_on: string; description: string; amount: number },
   code: string | null,
   catName: string,
+  interactionMode: 'buttons' | 'hermes' = 'buttons',
 ): string {
   const [, m, d] = tx.occurred_on.split('-');
-  return `${code ? `[${code}] ` : ''}${d}/${m}: ${tx.description} — ${formatBrl(Number(tx.amount))}\n🏷 ${catName}\n(✅ confirma; para trocar, responda: "${code ?? 'A001'} é <categoria>")`;
+  const instruction = interactionMode === 'hermes'
+    ? `(responda ao Hermes: "${code ?? 'A001'} é ${catName}" para confirmar, ou informe outra categoria)`
+    : `(✅ confirma; para trocar, responda: "${code ?? 'A001'} é <categoria>")`;
+  return `${code ? `[${code}] ` : ''}${d}/${m}: ${tx.description} — ${formatBrl(Number(tx.amount))}\n🏷 ${catName}\n${instruction}`;
 }
 
 /** Revisão diária: importa do banco, sugere categorias e envia os pendentes
  *  ao privado do Luis, um por mensagem, com botão ✅. */
-export async function runFinanceReview(bot: Bot): Promise<void> {
+export async function runFinanceReview(
+  bot: Bot,
+  options: { interactionMode?: 'buttons' | 'hermes' } = {},
+): Promise<void> {
+  const interactionMode = options.interactionMode ?? 'buttons';
   const config = getConfig();
   const chatId = await getSubjectChatId('luis');
   if (chatId === null) return;
@@ -113,8 +121,12 @@ export async function runFinanceReview(bot: Bot): Promise<void> {
           ? (categoryPath(t.category_id, categories) ?? t.category_name ?? 'Sem categoria')
           : 'Sem categoria';
     const code = await ensureReviewCode(t.id).catch(() => null);
-    const kb = new InlineKeyboard().text('✅ Confirmar', encodeFinAction('ok', t.id));
-    await bot.api.sendMessage(chatId, formatReviewLine(t, code, catName), { reply_markup: kb });
+    if (interactionMode === 'buttons') {
+      const kb = new InlineKeyboard().text('✅ Confirmar', encodeFinAction('ok', t.id));
+      await bot.api.sendMessage(chatId, formatReviewLine(t, code, catName), { reply_markup: kb });
+    } else {
+      await bot.api.sendMessage(chatId, formatReviewLine(t, code, catName, 'hermes'));
+    }
   }
 
   if (extra > 0) {

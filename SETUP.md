@@ -306,6 +306,48 @@ validada no VPS.
 4. O Hermes usa um bot próprio; mantenha o bot atual do V2 ligado durante o
    piloto. Não reutilize o mesmo token do Telegram nos dois processos.
 
+## 16. Passar as rotinas para o bot do Hermes e desligar o bot antigo
+
+Faça esta etapa somente depois de validar que o `HermesAgentAssistente` responde
+e acessa as ferramentas do Assistente V2. Não é necessária nova migração SQL.
+
+1. No Telegram, abra o `HermesAgentAssistente`, envie `/start` e confirme que
+   ele responde. Se as rotinas do casal usam um grupo, adicione o bot Hermes ao
+   mesmo grupo antes de continuar.
+2. Abra o terminal da VPS pelo painel da Hostinger.
+3. Execute estes comandos, um por vez:
+
+   ```bash
+   cd /root/assistente-pessoal-v2
+   git pull origin master
+   bash scripts/activate-hermes-telegram.sh
+   ```
+
+   O script copia internamente o `TELEGRAM_BOT_TOKEN` já configurado no Hermes;
+   ele não mostra o token na tela. Também cria backups dos dois arquivos `.env`,
+   atualiza a skill/MCP, faz o deploy e reinicia o gateway.
+4. Se aparecer a orientação para recarregar o MCP, envie `/reload-mcp` no chat
+   do Hermes.
+5. Confira na VPS:
+
+   ```bash
+   docker service logs --tail 80 assistente-v2_assistente-v2
+   ```
+
+   Deve aparecer `listener antigo desativado; rotinas serão entregues pelo bot do Hermes`.
+6. Teste uma revisão financeira pelo horário configurado ou execute:
+
+   ```bash
+   docker exec "$(docker ps -q -f name=assistente-v2_assistente-v2 | head -n1)" npm run job:finance
+   ```
+
+   A mensagem deve chegar pelo `HermesAgentAssistente`. Responda usando o código,
+   por exemplo `A001 é Transporte`, e confira se o Hermes informa `verified: true`.
+
+Para voltar temporariamente ao bot antigo, edite `/root/assistente-pessoal-v2/.env`,
+defina `TELEGRAM_LISTENER_ENABLED=true`, apague o valor de
+`HERMES_TELEGRAM_BOT_TOKEN` e rode `FORCE=1 bash scripts/deploy-pull.sh`.
+
 ## Notas
 
 - O web app da v1 sai do ar junto com a v1; ele volta servido pela v2

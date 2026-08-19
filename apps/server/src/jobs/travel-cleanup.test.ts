@@ -30,4 +30,12 @@ describe('runTravelCleanup', () => {
     await expect(runTravelCleanup(send, d)).rejects.toThrow('offline');
     expect(d.markTravelCleanupPrompted).not.toHaveBeenCalled();
   });
+
+  it('no modo Hermes envia o ID e não envia botões', async () => {
+    const d = deps();
+    const send = vi.fn(async () => undefined);
+    await runTravelCleanup(send, d, 'hermes');
+    expect(send.mock.calls[0][1]).toContain('Apague a lista de viagem 11111111-1111-4111-8111-111111111111');
+    expect(send.mock.calls[0][2]).toBeUndefined();
+  });
 });

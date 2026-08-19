@@ -143,6 +143,18 @@ export async function listOverdueProjectTasks(
   }));
 }
 
+/** Relê uma tarefa garantindo que ela pertence ao usuário informado. */
+export async function getProjectTaskForUser(taskId: string, userId: string): Promise<ProjectTask | null> {
+  const { data, error } = await supabase
+    .from('project_tasks')
+    .select(`${T_COLS}, projects!inner(user_id)`)
+    .eq('id', taskId)
+    .eq('projects.user_id', userId)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? toTask(data as never) : null;
+}
+
 /** Ações abertas de projetos ativos com prazo exatamente na data informada. */
 export async function listProjectTasksDueOn(
   userId: string,

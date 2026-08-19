@@ -17,8 +17,12 @@ import { claimScheduledRun } from '../db/scheduled-runs.js';
 import { todayInTz } from '../lib/dates.js';
 import { runTravelCleanup } from './travel-cleanup.js';
 
-export function startScheduler(bot: Bot): void {
+export function startScheduler(
+  bot: Bot,
+  options: { interactionMode?: 'buttons' | 'hermes' } = {},
+): void {
   const cfg = getConfig();
+  const interactionMode = options.interactionMode ?? 'buttons';
   const opts = { timezone: cfg.TIMEZONE };
   const send = (chatId: number, text: string) => bot.api.sendMessage(chatId, text).then(() => undefined);
   const cycle = (sources: CollectorSource[], label: string) => () => {
@@ -34,10 +38,12 @@ export function startScheduler(bot: Bot): void {
   if (isBankConfigured()) cron.schedule('0 */2 * * *', cycle(['finance'], 'finance'), opts);
   cron.schedule('30 6 * * *', cycle(['tasks', 'projects'], 'tasks+projects'), opts);
 
-  // Listas de viagem passadas: pergunta no grupo, uma vez por viagem, com confirmação por botão.
+  // Listas de viagem passadas: botão no bot nativo ou resposta textual no Hermes.
   cron.schedule('0 9 * * *', () => {
     runTravelCleanup((chatId, text, kb) =>
       bot.api.sendMessage(chatId, text, kb ? { reply_markup: kb } : undefined).then(() => undefined),
+      undefined,
+      interactionMode,
     ).catch((err) => console.error('[job:travel-cleanup]', err));
   }, opts);
 
@@ -58,10 +64,13 @@ export function startScheduler(bot: Bot): void {
   const routineJobs: Record<RoutineKey, () => Promise<void>> = {
     briefing: () => runDailyBriefing(send),
     coupleBriefing: () => runCoupleBriefing(send),
-    financeReview: () => runFinanceReview(bot),
+    financeReview: () => runFinanceReview(bot, { interactionMode }),
     checkin: () =>
-      runDailyCheckin((chatId, text, kb) =>
-        bot.api.sendMessage(chatId, text, kb ? { reply_markup: kb } : undefined).then(() => undefined),
+      runDailyCheckin(
+        (chatId, text, kb) =>
+          bot.api.sendMessage(chatId, text, kb ? { reply_markup: kb } : undefined).then(() => undefined),
+        undefined,
+        interactionMode,
       ),
   };
   cron.schedule('* * * * *', () => {

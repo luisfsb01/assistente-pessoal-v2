@@ -18,6 +18,7 @@ describe('loadConfig', () => {
     expect(cfg.USD_BRL_RATE).toBe(5.5);
     expect(cfg.TIMEZONE).toBe('America/Sao_Paulo');
     expect(cfg.PORT).toBe(8080);
+    expect(cfg.TELEGRAM_LISTENER_ENABLED).toBe(true);
   });
 
   it('converte números vindos de string', () => {
@@ -53,5 +54,22 @@ describe('loadConfig', () => {
     const empty = loadConfig({ ...minimal, LLM_API_KEY: '', LLM_BASE_URL: '' } as NodeJS.ProcessEnv);
     expect(empty.LLM_API_KEY).toBeUndefined();
     expect(empty.LLM_BASE_URL).toBeUndefined();
+  });
+
+  it('permite desligar o bot antigo quando o token de entrega do Hermes existe', () => {
+    const cfg = loadConfig({
+      ...minimal,
+      TELEGRAM_LISTENER_ENABLED: 'false',
+      HERMES_TELEGRAM_BOT_TOKEN: '123456:token-do-bot-hermes',
+    } as NodeJS.ProcessEnv);
+    expect(cfg.TELEGRAM_LISTENER_ENABLED).toBe(false);
+    expect(cfg.HERMES_TELEGRAM_BOT_TOKEN).toContain('token-do-bot-hermes');
+  });
+
+  it('impede desligar o listener sem configurar a entrega pelo Hermes', () => {
+    expect(() => loadConfig({
+      ...minimal,
+      TELEGRAM_LISTENER_ENABLED: 'false',
+    } as NodeJS.ProcessEnv)).toThrow(/HERMES_TELEGRAM_BOT_TOKEN|obrigatório/);
   });
 });

@@ -57,33 +57,53 @@ export async function sendNextCheckinQuestion(
   chatId: number,
   send: SendWithKb,
   deps: CheckinDeps = defaultDeps,
+  interactionMode: 'buttons' | 'hermes' = 'buttons',
 ): Promise<void> {
   const today = deps.todayIso();
   const pending = await deps.pendingHabitsFor(userId, today);
   if (pending.length > 0) {
     const h = pending[0];
-    const kb = new InlineKeyboard().text('✅', encodeHabitAction(true, h.id)).text('❌', encodeHabitAction(false, h.id));
-    await send(chatId, `${h.name} hoje?`, kb);
+    if (interactionMode === 'hermes') {
+      await send(
+        chatId,
+        `${h.name} hoje?\nResponda ao Hermes: "Registre o hábito ${h.name} como feito hoje" ou "como não feito hoje".`,
+      );
+    } else {
+      const kb = new InlineKeyboard().text('✅', encodeHabitAction(true, h.id)).text('❌', encodeHabitAction(false, h.id));
+      await send(chatId, `${h.name} hoje?`, kb);
+    }
     return;
   }
   const overdue = (await deps.listOverdueProjectTasks(userId, today)).slice(0, MAX_PTASKS);
   for (const t of overdue) {
-    const kb = new InlineKeyboard()
-      .text('✅ Concluí', encodePtaskAction('done', t.id))
-      .text('❌ Segue pendente', encodePtaskAction('keep', t.id));
-    await send(chatId, `Tarefa vencida no projeto ${t.projectName}: "${t.title}" (prazo ${ddmm(t.dueDate!)})`, kb);
+    const text = `Tarefa vencida no projeto ${t.projectName}: "${t.title}" (prazo ${ddmm(t.dueDate!)})`;
+    if (interactionMode === 'hermes') {
+      await send(
+        chatId,
+        `${text}\nResponda ao Hermes: "Marque a tarefa de projeto ${t.id} como concluída" ou "mantenha pendente".`,
+      );
+    } else {
+      const kb = new InlineKeyboard()
+        .text('✅ Concluí', encodePtaskAction('done', t.id))
+        .text('❌ Segue pendente', encodePtaskAction('keep', t.id));
+      await send(chatId, text, kb);
+    }
   }
 }
 
 /** Check-in das 21:00 — rotina direta (sem juiz, fora do teto da F4), por pessoa no privado. */
-export async function runDailyCheckin(send: SendWithKb, deps: CheckinDeps = defaultDeps): Promise<void> {
+export async function runDailyCheckin(
+  send: SendWithKb,
+  deps: CheckinDeps = defaultDeps,
+  interactionMode: 'buttons' | 'hermes' = 'buttons',
+): Promise<void> {
   for (const subject of ['luis', 'esposa'] as const) {
     try {
       const user = await deps.getUserBySubject(subject);
       if (!user) continue;
       const chatId = await deps.getSubjectChatId(subject);
       if (chatId === null) continue;
-      await sendNextCheckinQuestion(user.id, chatId, send, deps);
+      await sendNextCheckinQuestion(user.id, chatId, send, deps, interactionMode);
     } catch (err) {
       console.error(`[checkin] falhou para ${subject}:`, err);
     }

@@ -5,7 +5,35 @@ description: Consultar e alterar com segurança os dados do Assistente Pessoal V
 
 # Assistente Pessoal V2
 
-Use as ferramentas `mcp_assistente_v2_*` para consultar e alterar os dados do usuário. Nunca acesse o Supabase diretamente e nunca afirme que uma alteração financeira foi concluída apenas porque a intenção foi entendida.
+Use as ferramentas `mcp_assistente_v2_*` para consultar e alterar os dados do usuário. Nunca acesse o Supabase diretamente e nunca afirme que uma alteração foi concluída apenas porque a intenção foi entendida.
+
+## Rotinas enviadas pelo Assistente V2
+
+As mensagens automáticas de briefing, revisão financeira e check-in podem ser enviadas pelo próprio bot do Hermes. Elas são geradas pelo Assistente V2, portanto podem não estar no histórico interno da sessão do Hermes. Use o texto explícito enviado pelo usuário e as ferramentas abaixo para gravar respostas.
+
+### Check-in de hábitos
+
+Quando o usuário disser que fez ou não fez um hábito:
+
+1. Determine o dono (`luis` ou `esposa`) pelo remetente. Nunca adivinhe em grupo; pergunte se não estiver claro.
+2. Se o nome estiver ausente ou ambíguo, use `habit_list_pending`.
+3. Chame `habit_record_checkin` com nome, dono, resposta e data mencionada (ou hoje).
+4. Só confirme quando o retorno trouxer `verified: true`.
+
+### Tarefas vencidas de projeto
+
+Quando o usuário responder ao check-in sobre uma tarefa:
+
+1. Use o ID presente na mensagem. Se não houver ID, consulte `project_list_overdue_tasks`.
+2. “Concluída” corresponde a `status: done`. “Continua pendente” não exige alteração.
+3. Chame `project_update_task` apenas quando houver pedido de mudança.
+4. Só confirme quando o retorno trouxer `verified: true`.
+
+### Limpeza de lista de viagem
+
+- “Manter” não exige ferramenta nem alteração.
+- Só use `travel_delete_list` quando alguém do grupo pedir explicitamente para apagar e o ID estiver presente na mensagem.
+- A exclusão é destrutiva. Só confirme quando o retorno trouxer `verified: true`.
 
 ## Reclassificação financeira
 
@@ -41,3 +69,4 @@ Use `finance_sync_bank` quando o usuário pedir atualização ou quando uma cons
 - Não exponha tokens, cabeçalhos de autenticação ou detalhes internos do banco.
 - Não execute em paralelo ferramentas que escrevem em finanças.
 - Para consultas, prefira intervalos curtos e limites pequenos.
+- Nunca altere hábitos ou tarefas de `luis` usando dados da `esposa`, ou vice-versa.

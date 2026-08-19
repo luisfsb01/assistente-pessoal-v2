@@ -6,6 +6,8 @@ services:
     image: assistente-pessoal-v2-assistente-v2:latest
     environment:
       - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+      - TELEGRAM_LISTENER_ENABLED=${TELEGRAM_LISTENER_ENABLED:-true}
+      - HERMES_TELEGRAM_BOT_TOKEN=${HERMES_TELEGRAM_BOT_TOKEN:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - LLM_API_KEY=${LLM_API_KEY:-}
       - LLM_BASE_URL=${LLM_BASE_URL:-}

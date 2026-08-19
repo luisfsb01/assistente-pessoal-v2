@@ -29,6 +29,7 @@ function ddmm(iso: string): string {
 export async function runTravelCleanup(
   send: SendWithKb,
   deps: TravelCleanupDeps = defaultDeps,
+  interactionMode: 'buttons' | 'hermes' = 'buttons',
 ): Promise<number> {
   const chatId = await deps.getGroupChatId();
   if (chatId === null) return 0;
@@ -36,14 +37,18 @@ export async function runTravelCleanup(
   let sent = 0;
   const lists = await deps.listPastUnpromptedTravelLists(deps.todayIso());
   for (const list of lists) {
-    const kb = new InlineKeyboard()
-      .text('🗑️ Pode apagar', encodeTravelCleanupAction('delete', list.id))
-      .text('📌 Manter', encodeTravelCleanupAction('keep', list.id));
-    await send(
-      chatId,
-      `A viagem “${list.name}” (${ddmm(list.travelDate)}) já passou. Posso apagar a lista dessa viagem?`,
-      kb,
-    );
+    const text = `A viagem “${list.name}” (${ddmm(list.travelDate)}) já passou. Posso apagar a lista dessa viagem?`;
+    if (interactionMode === 'hermes') {
+      await send(
+        chatId,
+        `${text}\nResponda ao Hermes: "Apague a lista de viagem ${list.id}" ou "mantenha a lista".`,
+      );
+    } else {
+      const kb = new InlineKeyboard()
+        .text('🗑️ Pode apagar', encodeTravelCleanupAction('delete', list.id))
+        .text('📌 Manter', encodeTravelCleanupAction('keep', list.id));
+      await send(chatId, text, kb);
+    }
     await deps.markTravelCleanupPrompted(list.id);
     sent++;
   }

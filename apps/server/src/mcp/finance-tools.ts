@@ -22,6 +22,7 @@ import {
 } from '../db/agent-operations.js';
 import { syncBankTransactionsToToday } from '../services/bank-sync.js';
 import { reclassifyTransactions } from '../services/transaction-reclassification.js';
+import { registerRoutineMcpTools } from './routine-tools.js';
 
 const datePattern = '^\\d{4}-\\d{2}-\\d{2}$';
 
@@ -344,6 +345,8 @@ export function createFinanceMcpServer(
     },
     async ({ limit = 20 }) => result({ ok: true, operations: await deps.listOperations(limit) }),
   );
+
+  registerRoutineMcpTools(server);
 
   return server;
 }

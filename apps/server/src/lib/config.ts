@@ -4,9 +4,19 @@ import { z } from 'zod';
 const optionalNonEmpty = z.preprocess((value) => value === '' ? undefined : value, z.string().min(1).optional());
 const optionalUrl = z.preprocess((value) => value === '' ? undefined : value, z.string().url().optional());
 const optionalSecret = z.preprocess((value) => value === '' ? undefined : value, z.string().min(32).optional());
+const booleanFromEnv = z.preprocess((value) => {
+  if (value === undefined || value === '') return true;
+  if (value === true || value === 'true' || value === '1') return true;
+  if (value === false || value === 'false' || value === '0') return false;
+  return value;
+}, z.boolean());
 
 const schema = z.object({
   TELEGRAM_TOKEN: z.string().min(1),
+  /** Desliga o long polling do bot antigo sem interromper API, jobs e dashboard. */
+  TELEGRAM_LISTENER_ENABLED: booleanFromEnv,
+  /** Token do bot do Hermes usado somente para enviar rotinas; o Hermes continua sendo o único listener. */
+  HERMES_TELEGRAM_BOT_TOKEN: optionalNonEmpty,
   OPENAI_API_KEY: z.string().min(1),
   LLM_API_KEY: optionalNonEmpty,
   LLM_BASE_URL: optionalUrl,
@@ -25,6 +35,14 @@ const schema = z.object({
   BANCO_MCP_TOKEN: z.string().default(''),
   HERMES_MCP_TOKEN: optionalSecret,
   VAULT_PATH: z.string().default('./data/vault'),
+}).superRefine((cfg, ctx) => {
+  if (!cfg.TELEGRAM_LISTENER_ENABLED && !cfg.HERMES_TELEGRAM_BOT_TOKEN) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['HERMES_TELEGRAM_BOT_TOKEN'],
+      message: 'obrigatório quando TELEGRAM_LISTENER_ENABLED=false',
+    });
+  }
 });
 
 export type Config = z.infer<typeof schema>;

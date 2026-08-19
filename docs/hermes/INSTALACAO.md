@@ -324,6 +324,11 @@ mcp_servers:
         - finance_reclassify_transaction
         - finance_sync_bank
         - operations_list_receipts
+        - habit_list_pending
+        - habit_record_checkin
+        - project_list_overdue_tasks
+        - project_update_task
+        - travel_delete_list
       resources: false
       prompts: false
 ```
@@ -350,6 +355,11 @@ Não crie outra linha `mcp_servers:`. Localize a seção que já existe e acresc
         - finance_reclassify_transaction
         - finance_sync_bank
         - operations_list_receipts
+        - habit_list_pending
+        - habit_record_checkin
+        - project_list_overdue_tasks
+        - project_update_task
+        - travel_delete_list
       resources: false
       prompts: false
 ```

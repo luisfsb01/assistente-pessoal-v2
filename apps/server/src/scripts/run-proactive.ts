@@ -2,8 +2,9 @@
 import { Bot } from 'grammy';
 import { getConfig } from '../lib/config.js';
 import { runProactiveCycle } from '../proactive/engine.js';
+import { telegramDeliveryConfig } from '../lib/telegram-delivery.js';
 
-const bot = new Bot(getConfig().TELEGRAM_TOKEN);
+const bot = new Bot(telegramDeliveryConfig(getConfig()).token);
 const out = await runProactiveCycle(['finance', 'calendar', 'tasks', 'projects'], (chatId, text) =>
   bot.api.sendMessage(chatId, text).then(() => undefined),
 );
