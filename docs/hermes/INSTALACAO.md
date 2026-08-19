@@ -329,6 +329,9 @@ mcp_servers:
         - project_list_overdue_tasks
         - project_update_task
         - travel_delete_list
+        - knowledge_save_content
+        - knowledge_save_url
+        - knowledge_search
       resources: false
       prompts: false
 ```
@@ -360,6 +363,9 @@ Não crie outra linha `mcp_servers:`. Localize a seção que já existe e acresc
         - project_list_overdue_tasks
         - project_update_task
         - travel_delete_list
+        - knowledge_save_content
+        - knowledge_save_url
+        - knowledge_search
       resources: false
       prompts: false
 ```
