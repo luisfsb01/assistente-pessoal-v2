@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { gmailApiFromGoogle, mapMessage } from './gmail.js';
+import { gmailApiFromGoogle, mapMessage, mapSearchMessage } from './gmail.js';
 
 const msg = (id: string, internalDate: number, labels: string[] = ['INBOX']) => ({
   id,
@@ -30,6 +30,33 @@ describe('mapMessage', () => {
   it('mensagem sem headers/labels não explode', () => {
     const m = mapMessage({ id: 'm2' } as never);
     expect(m).toEqual({ id: 'm2', from: '', subject: '', snippet: '', categories: [], starred: false, internalDate: 0 });
+  });
+});
+
+describe('mapSearchMessage', () => {
+  it('decodifica o corpo base64url e prefere texto puro', () => {
+    const body = Buffer.from('Produto: Fone Bluetooth').toString('base64url');
+    const mapped = mapSearchMessage({
+      ...msg('m3', 3000),
+      payload: {
+        headers: msg('m3', 3000).payload.headers,
+        parts: [{ mimeType: 'text/plain', body: { data: body } }],
+      },
+    } as never);
+    expect(mapped.bodyText).toBe('Produto: Fone Bluetooth');
+  });
+
+  it('converte HTML em texto quando não há parte text/plain', () => {
+    const body = Buffer.from('<p>Produto: <b>Teclado Mecânico</b></p>').toString('base64url');
+    const mapped = mapSearchMessage({
+      ...msg('m4', 4000),
+      payload: {
+        headers: msg('m4', 4000).payload.headers,
+        body: { data: body },
+        mimeType: 'text/html',
+      },
+    } as never);
+    expect(mapped.bodyText).toBe('Produto: Teclado Mecânico');
   });
 });
 
@@ -85,5 +112,35 @@ describe('gmailApiFromGoogle', () => {
     } as never;
     await gmailApiFromGoogle(client).trashMessage('m9');
     expect(trashed).toEqual(['m9']);
+  });
+
+  it('pesquisa e busca o conteúdo completo dos e-mails', async () => {
+    const calls: Array<{ query?: string; format?: string }> = [];
+    const client = {
+      users: {
+        messages: {
+          list: async ({ q }: { q: string }) => {
+            calls.push({ query: q });
+            return { data: { messages: [{ id: 'compra-1' }] } };
+          },
+          get: async ({ id, format }: { id: string; format: string }) => {
+            calls.push({ format });
+            return {
+              data: {
+                ...msg(id, 5000),
+                payload: {
+                  headers: msg(id, 5000).payload.headers,
+                  body: { data: Buffer.from('Produto: Cafeteira').toString('base64url') },
+                  mimeType: 'text/plain',
+                },
+              },
+            };
+          },
+        },
+      },
+    } as never;
+    const out = await gmailApiFromGoogle(client).searchEmails('after:1 before:2 Shopee', 5);
+    expect(calls).toEqual([{ query: 'after:1 before:2 Shopee' }, { format: 'full' }]);
+    expect(out[0]?.bodyText).toBe('Produto: Cafeteira');
   });
 });

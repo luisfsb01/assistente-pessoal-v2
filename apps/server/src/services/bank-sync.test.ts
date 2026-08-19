@@ -38,6 +38,7 @@ describe('syncBankTransactions', () => {
       applyRules: async () => new Map(),
       suggestTransactionCategory: async () => true,
       suggestCategoriesFor: async () => new Map(),
+      enrichMarketplaceDescriptions: async () => 0,
       ...over,
     };
   }
@@ -79,6 +80,26 @@ describe('syncBankTransactions', () => {
     }));
     expect(r).toEqual({ imported: 0, autoClassified: 1 });
     expect(suggested).toEqual(['prior:c2']);
+  });
+
+  it('enriquece descrições por e-mail antes de carregar as transações para classificação', async () => {
+    const calls: string[] = [];
+    const enriched = tx('t1', 'MERCADOLIVRE*MERCA01/06 [email - produto "Fone Bluetooth"]');
+    await syncBankTransactions('2026-07-12', '2026-07-12', syncDeps({
+      enrichMarketplaceDescriptions: async () => {
+        calls.push('enrich');
+        return 1;
+      },
+      listUncategorizedBankTransactions: async () => {
+        calls.push('list');
+        return [enriched];
+      },
+      applyRules: async (items) => {
+        calls.push(items[0]?.description ?? '');
+        return new Map();
+      },
+    }));
+    expect(calls).toEqual(['enrich', 'list', enriched.description]);
   });
 
   it('falha da IA não perde a importação e deixa a transação para nova tentativa', async () => {

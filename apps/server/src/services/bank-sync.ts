@@ -13,6 +13,7 @@ import { isBankConfigured, listBankTransactions } from '../lib/banco-mcp.js';
 import { getConfig } from '../lib/config.js';
 import { todayInTz } from '../lib/dates.js';
 import { suggestCategoriesFor } from './categorize.js';
+import { enrichMarketplaceTransactionDescriptions } from './purchase-email-enrichment.js';
 
 export type BankSyncDeps = {
   listBankTransactions: typeof listBankTransactions;
@@ -25,6 +26,7 @@ export type BankSyncDeps = {
     txs: Array<{ id: string; description: string; amount: number }>,
     categories: Category[],
   ) => Promise<Map<string, Category>>;
+  enrichMarketplaceDescriptions: typeof enrichMarketplaceTransactionDescriptions;
 };
 
 const defaultDeps: BankSyncDeps = {
@@ -35,6 +37,7 @@ const defaultDeps: BankSyncDeps = {
   applyRules,
   suggestTransactionCategory,
   suggestCategoriesFor: (txs, categories) => suggestCategoriesFor(txs, categories),
+  enrichMarketplaceDescriptions: () => enrichMarketplaceTransactionDescriptions(),
 };
 
 /** Importa transações do Banco MCP e sugere categoria para tudo que estiver sem uma.
@@ -51,6 +54,13 @@ export async function syncBankTransactions(
       .filter((t) => t.id)
       .map((t) => ({ externalId: t.id, occurredOn: t.date, description: t.description, amount: t.amount, kind: t.kind })),
   );
+  try {
+    // O produto precisa entrar antes das regras/IA para melhorar a sugestão de categoria.
+    await deps.enrichMarketplaceDescriptions();
+  } catch (err) {
+    // Gmail é um enriquecimento opcional: uma indisponibilidade não pode bloquear o banco.
+    console.error('[bank-sync] enriquecimento por e-mail falhou (será repetido):', err);
+  }
   // Inclui registros importados em tentativas anteriores: se a IA falhou, o próximo
   // clique em Atualizar retoma a categorização em vez de deixá-los órfãos.
   const uncategorized = await deps.listUncategorizedBankTransactions();

@@ -155,6 +155,12 @@ validada no VPS.
    classifica o que chegou de novo.
 4. Corrigir a limpeza é conversa: "não jogue fora e-mails da escola" vira
    memória e a IA respeita. Recuperar e-mail: lixeira do Gmail (30 dias).
+5. **Compras do Mercado Livre e Shopee**: não há nova configuração nem nova
+   migração. Em cada sincronização bancária, o assistente procura no Gmail o
+   comprovante próximo da data da compra (e também estima a data original das
+   parcelas posteriores). Quando a correspondência é segura, a descrição vira,
+   por exemplo, `MERCADOLIVRE*MERCA01/06 [email - produto "Fone Bluetooth"]`
+   antes da sugestão de categoria. Se houver dúvida entre compras, nada é alterado.
 
 ## 8. Fase 6 (segundo cérebro: vault + Syncthing + Obsidian)
 

@@ -176,6 +176,38 @@ export async function listUncategorizedBankTransactions(limit = 200): Promise<Tr
   return (data ?? []) as Transaction[];
 }
 
+/** Compras de marketplace cuja descrição ainda não recebeu o produto encontrado no e-mail. */
+export async function listMarketplaceTransactionsForEnrichment(limit = 200): Promise<Transaction[]> {
+  const { data, error } = await supabase
+    .from('transactions')
+    .select(TX_COLS)
+    .eq('source', 'bank')
+    .eq('kind', 'expense')
+    .or('description.ilike.%mercadolivre%,description.ilike.%mercado livre%,description.ilike.%shopee%')
+    .not('description', 'ilike', '%[email - produto%')
+    .order('occurred_on', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []) as Transaction[];
+}
+
+/** Atualização otimista: não sobrescreve uma descrição que tenha sido corrigida em paralelo. */
+export async function updateTransactionDescription(
+  txId: string,
+  expectedDescription: string,
+  description: string,
+  resetSuggestedCategory = false,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('transactions')
+    .update(resetSuggestedCategory ? { description, category_id: null } : { description })
+    .eq('id', txId)
+    .eq('description', expectedDescription)
+    .select('id');
+  if (error) throw error;
+  return (data ?? []).length > 0;
+}
+
 /** Garante um review_code para a transação; retorna o código (existente ou novo). */
 export async function ensureReviewCode(txId: string): Promise<string | null> {
   const { data: tx, error: e1 } = await supabase.from('transactions').select('review_code').eq('id', txId).maybeSingle();
