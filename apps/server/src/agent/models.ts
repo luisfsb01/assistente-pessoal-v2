@@ -35,6 +35,7 @@ const CHAT_DOMAINS = [
   /\b(projeto|kanban|status)\w*/i,
   /\b(e-?mail|gmail|mensagem)\w*/i,
   /\b(compra|mercado|lista)\w*/i,
+  /\b(viagem|viajar|voo|passagem|hotel|hospedagem|reserva|aluguel de carro)\w*/i,
 ];
 
 /** Escala conversas que cruzam dois ou mais domínios pessoais. */

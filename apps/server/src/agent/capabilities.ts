@@ -9,7 +9,8 @@ export type AgentCapability =
   | 'knowledge'
   | 'habits'
   | 'projects'
-  | 'email_cleanup';
+  | 'email_cleanup'
+  | 'travel';
 
 /**
  * Matriz de autorização do bot. A restrição acontece antes de montar o ToolSet,
@@ -17,7 +18,7 @@ export type AgentCapability =
  */
 export function capabilitiesForChat(identity: ChatIdentity): ReadonlySet<AgentCapability> {
   if (identity.kind === 'group') {
-    return new Set(['memory', 'tasks', 'shopping', 'calendar']);
+    return new Set(['memory', 'tasks', 'shopping', 'calendar', 'travel']);
   }
   if (identity.subject === 'luis') {
     return new Set([
@@ -30,9 +31,10 @@ export function capabilitiesForChat(identity: ChatIdentity): ReadonlySet<AgentCa
       'habits',
       'projects',
       'email_cleanup',
+      'travel',
     ]);
   }
-  return new Set(['memory', 'tasks', 'shopping', 'calendar', 'habits', 'projects']);
+  return new Set(['memory', 'tasks', 'shopping', 'calendar', 'habits', 'projects', 'travel']);
 }
 
 export function canAccess(identity: ChatIdentity, capability: AgentCapability): boolean {

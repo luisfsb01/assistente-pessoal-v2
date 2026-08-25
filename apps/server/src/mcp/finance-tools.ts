@@ -24,6 +24,7 @@ import { syncBankTransactionsToToday } from '../services/bank-sync.js';
 import { reclassifyTransactions } from '../services/transaction-reclassification.js';
 import { registerRoutineMcpTools } from './routine-tools.js';
 import { registerKnowledgeMcpTools } from './knowledge-tools.js';
+import { registerTravelMcpTools } from './travel-tools.js';
 
 const datePattern = '^\\d{4}-\\d{2}-\\d{2}$';
 
@@ -442,6 +443,7 @@ export function createFinanceMcpServer(
 
   registerRoutineMcpTools(server);
   registerKnowledgeMcpTools(server);
+  registerTravelMcpTools(server);
 
   return server;
 }

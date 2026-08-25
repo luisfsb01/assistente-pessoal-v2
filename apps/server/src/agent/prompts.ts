@@ -62,6 +62,9 @@ export function buildSystemPrompt(args: {
     capabilities.has('email_cleanup')
       ? '- Proteção da caixa de entrada: use email_cleanup_protect quando Luis disser que um tipo, remetente, domínio ou assunto de e-mail não deve ir para a lixeira.'
       : '',
+    capabilities.has('travel')
+      ? '- Gestão de viagens: use trip_create, trip_list, trip_summary, trip_update e trip_add_reservation para roteiro e reservas. No privado do Luis, trip_import_gmail consulta confirmações no Gmail.'
+      : '',
   ].filter(Boolean);
 
   const toolRules = [
@@ -87,6 +90,12 @@ export function buildSystemPrompt(args: {
       : '',
     capabilities.has('email_cleanup')
       ? '- Se Luis disser que determinado tipo de e-mail não deve ir para a lixeira, use email_cleanup_protect e confirme a regra. Não trate isso apenas como memória e não restaure e-mails antigos automaticamente.'
+      : '',
+    capabilities.has('travel')
+      ? `- Quando pedirem para criar uma viagem, use trip_create imediatamente: somente o nome é obrigatório; não pergunte datas, destino, viajantes ou detalhes opcionais que não foram informados. Use trip_update quando esses dados forem acrescentados depois.
+- "Lista da viagem" ou itens para levar usam travel_list/travel_add. Roteiro, voo, hotel, carro e reservas usam trip_*.
+- Quando Luis disser que reservou e pedir para olhar o e-mail, use trip_import_gmail. Nunca diga que encontrou ou salvou algo se a tool não confirmar.
+- Antes de responder com as informações de uma viagem, use trip_summary e diferencie claramente o que está reservado, pendente, cancelado e ainda sem reserva.`
       : '',
   ].filter(Boolean);
 

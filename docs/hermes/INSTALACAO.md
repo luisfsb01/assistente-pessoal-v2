@@ -332,6 +332,12 @@ mcp_servers:
         - project_list_overdue_tasks
         - project_update_task
         - travel_delete_list
+        - travel_create_trip
+        - travel_list_trips
+        - travel_get_summary
+        - travel_update_trip
+        - travel_add_reservation
+        - travel_import_gmail
         - knowledge_save_content
         - knowledge_save_url
         - knowledge_search
@@ -369,6 +375,12 @@ Não crie outra linha `mcp_servers:`. Localize a seção que já existe e acresc
         - project_list_overdue_tasks
         - project_update_task
         - travel_delete_list
+        - travel_create_trip
+        - travel_list_trips
+        - travel_get_summary
+        - travel_update_trip
+        - travel_add_reservation
+        - travel_import_gmail
         - knowledge_save_content
         - knowledge_save_url
         - knowledge_search

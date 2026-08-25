@@ -350,6 +350,14 @@ Para voltar temporariamente ao bot antigo, edite `/root/assistente-pessoal-v2/.e
 defina `TELEGRAM_LISTENER_ENABLED=true`, apague o valor de
 `HERMES_TELEGRAM_BOT_TOKEN` e rode `FORCE=1 bash scripts/deploy-pull.sh`.
 
+## 17. Gestão de viagens
+
+1. Execute `supabase/migrations/0015_travel_management.sql` no SQL Editor.
+2. Faça o deploy e recarregue o MCP do Hermes. As credenciais Google já usadas
+   pelo Gmail são reutilizadas; não é necessário conceder um novo escopo.
+3. Teste criando uma viagem apenas pelo nome, importando uma confirmação do
+   Gmail e pedindo em seguida o resumo da viagem.
+
 ## Notas
 
 - O web app da v1 sai do ar junto com a v1; ele volta servido pela v2

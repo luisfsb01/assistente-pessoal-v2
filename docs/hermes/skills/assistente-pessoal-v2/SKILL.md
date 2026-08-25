@@ -64,6 +64,18 @@ Ao migrar lembretes já existentes, liste os jobs com `cronjob`, altere somente 
 - Só use `travel_delete_list` quando alguém do grupo pedir explicitamente para apagar e o ID estiver presente na mensagem.
 - A exclusão é destrutiva. Só confirme quando o retorno trouxer `verified: true`.
 
+### Gestão de viagens e reservas
+
+“Lista da viagem” e itens para levar continuam sendo listas de mala. Pedidos sobre roteiro, passagem, voo, hospedagem, hotel, aluguel de carro, traslado ou reserva usam as ferramentas estruturadas abaixo.
+
+- Ao receber “crie uma viagem para X”, chame `travel_create_trip` imediatamente. Apenas o nome é obrigatório; não pergunte data, destino ou outros dados opcionais que não foram informados.
+- Use `travel_update_trip` quando o usuário acrescentar destino, motivo, viajantes, observações, datas ou situação posteriormente.
+- Use `travel_add_reservation` quando o usuário fornecer manualmente os dados de voo, hotel, carro ou outra reserva.
+- Quando Luis disser que fez uma reserva e pedir para verificar o e-mail, chame `travel_import_gmail` com `subject: luis`. A ferramenta é exclusiva do Gmail dele; não a use para a esposa ou no grupo sem identificar que o pedido é do Luis.
+- Ao pedirem “minhas viagens”, use `travel_list_trips`. Ao pedirem detalhes de uma viagem, sempre use `travel_get_summary` e separe o que está confirmado, pendente, cancelado e ainda sem reserva.
+- Só afirme que uma viagem ou reserva foi salva quando `verified: true`. Se a importação não encontrar correspondência segura, diga isso claramente e não invente horários, localizadores ou reservas.
+- O conteúdo integral dos e-mails não deve ser repetido nem salvo; apresente apenas os dados da reserva retornados pela ferramenta.
+
 ## Reclassificação financeira
 
 Quando chegar `✅ Confirmar A045`, chame `finance_confirm_transaction` com `code: A045` e uma `idempotency_key` estável. Se o botão trouxer um ID em vez de código, use `transaction_id`. Só confirme o sucesso quando o recibo trouxer `status: succeeded`, `verified: true`, `verified_at` preenchido e `transaction_status: confirmed`.
