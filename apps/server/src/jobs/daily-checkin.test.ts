@@ -86,13 +86,12 @@ describe('runDailyCheckin', () => {
     expect(sent[0].chatId).toBe(222);
   });
 
-  it('no modo Hermes envia instrução textual sem botões', async () => {
+  it('no modo Hermes envia botões que viram respostas autossuficientes', async () => {
     const { d } = deps();
     const { send, sent } = collector();
     await runDailyCheckin(send, d, 'hermes');
-    expect(sent[0]).toMatchObject({ chatId: 111, kb: false });
-    expect(sent[0].text).toContain('Responda ao Hermes');
-    expect(sent[0].text).toContain('Registre o hábito Academia');
+    expect(sent[0]).toMatchObject({ chatId: 111, kb: true });
+    expect(sent[0].text).toContain('Academia hoje?');
   });
 });
 

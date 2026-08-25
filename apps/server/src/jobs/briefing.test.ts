@@ -1,6 +1,7 @@
 import '../test-setup.js';
 import { describe, expect, it } from 'vitest';
 import {
+  buildBriefingTaskButtons,
   formatDailyBriefing,
   isEmptyBriefing,
   runCoupleBriefing,
@@ -58,6 +59,23 @@ describe('formatDailyBriefing', () => {
   });
 });
 
+describe('buildBriefingTaskButtons', () => {
+  it('no Hermes inclui feito/não feito com referências curtas', () => {
+    const kb = buildBriefingTaskButtons(baseCtx, 'hermes');
+    expect(kb).toMatchObject({
+      keyboard: [
+        [{ text: '✅ Fiz T-T1' }, { text: '❌ Não fiz T-T1' }],
+        [{ text: '✅ Fiz P-PT1' }, { text: '❌ Não fiz P-PT1' }],
+      ],
+    });
+  });
+
+  it('no bot nativo mantém callbacks inline', () => {
+    const kb = buildBriefingTaskButtons(baseCtx, 'buttons');
+    expect(kb).toMatchObject({ inline_keyboard: expect.any(Array) });
+  });
+});
+
 describe('isEmptyBriefing', () => {
   it('considera apenas as fontes permitidas', () => {
     expect(
@@ -103,7 +121,7 @@ describe('runDailyBriefing', () => {
   }
 
   it('inclui tarefas abertas com prazo até hoje, mas não futuras', async () => {
-    const sent: Array<[number, string]> = [];
+    const sent: Array<[number, string, boolean]> = [];
     const d = deps({
       listTasks: async (userId) =>
         userId === 'u1'
@@ -114,11 +132,12 @@ describe('runDailyBriefing', () => {
             ] as never)
           : [],
     });
-    await runDailyBriefing(async (chatId, text) => void sent.push([chatId, text]), d);
+    await runDailyBriefing(async (chatId, text, kb) => void sent.push([chatId, text, kb !== undefined]), d, 'hermes');
     expect(sent).toHaveLength(1);
     expect(sent[0][1]).toContain('Atrasada');
     expect(sent[0][1]).toContain('De hoje');
     expect(sent[0][1]).not.toContain('Futura');
+    expect(sent[0][2]).toBe(true);
   });
 
   it('inclui ações de projetos com a data do dia', async () => {

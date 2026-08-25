@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AgentOperation } from '../db/agent-operations.js';
 import type { Category, Transaction } from '../db/finance.js';
 import {
+  confirmTransactionWithReceipt,
   reclassifyTransactionWithReceipt,
   type FinanceMcpDeps,
 } from './finance-tools.js';
@@ -130,5 +131,30 @@ describe('reclassifyTransactionWithReceipt', () => {
     const response = await reclassifyTransactionWithReceipt(input, fake);
     expect(fake.reclassifyTransactions).not.toHaveBeenCalled();
     expect(response.structuredContent).toMatchObject({ replayed: true, verified: true });
+  });
+});
+
+describe('confirmTransactionWithReceipt', () => {
+  it('confirma a categoria sugerida pelo botão e relê o banco', async () => {
+    const pendingWithCategory = { ...transaction, category_id: category.id };
+    const fake = deps({
+      getTransactionByReviewCode: vi.fn(async () => pendingWithCategory),
+      beginOperation: vi.fn(async () => ({
+        operation: operation({
+          tool_name: 'finance_confirm_transaction',
+          request: { code: 'A045', idempotency_key: 'telegram:confirm:A045' },
+          idempotency_key: 'telegram:confirm:A045',
+        }),
+        created: true,
+      })),
+    });
+    const response = await confirmTransactionWithReceipt({
+      code: 'A045',
+      idempotency_key: 'telegram:confirm:A045',
+    }, fake);
+    expect(fake.reclassifyTransactions).toHaveBeenCalledWith([{ id: 'tx-1', categoryId: 'cat-1' }]);
+    expect(response.structuredContent).toMatchObject({
+      status: 'succeeded', verified: true, transaction_status: 'confirmed', review_code: 'A045',
+    });
   });
 });

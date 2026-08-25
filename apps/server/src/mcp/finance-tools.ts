@@ -83,6 +83,27 @@ const reclassifyInput = fromJsonSchema<{
   additionalProperties: false,
 });
 
+const confirmInput = fromJsonSchema<{
+  code?: string;
+  transaction_id?: string;
+  idempotency_key: string;
+}>({
+  type: 'object',
+  properties: {
+    code: { type: 'string', minLength: 2, maxLength: 10, description: 'Código de revisão, por exemplo A045.' },
+    transaction_id: { type: 'string', minLength: 1, maxLength: 100 },
+    idempotency_key: {
+      type: 'string',
+      minLength: 8,
+      maxLength: 120,
+      pattern: '^[A-Za-z0-9._:-]+$',
+    },
+  },
+  required: ['idempotency_key'],
+  anyOf: [{ required: ['code'] }, { required: ['transaction_id'] }],
+  additionalProperties: false,
+});
+
 const syncInput = fromJsonSchema<{ idempotency_key: string }>({
   type: 'object',
   properties: {
@@ -239,6 +260,67 @@ export async function reclassifyTransactionWithReceipt(
   }
 }
 
+export async function confirmTransactionWithReceipt(
+  input: { code?: string; transaction_id?: string; idempotency_key: string },
+  deps: FinanceMcpDeps,
+): Promise<CallToolResult> {
+  const request = { ...input } as Record<string, unknown>;
+  const begun = await deps.beginOperation({
+    toolName: 'finance_confirm_transaction',
+    idempotencyKey: input.idempotency_key,
+    request,
+  });
+  if (!begun.created) {
+    if (
+      begun.operation.tool_name !== 'finance_confirm_transaction' ||
+      canonicalJson(begun.operation.request) !== canonicalJson(request)
+    ) {
+      return errorResult('idempotency_conflict', 'Esse identificador já foi usado para outra solicitação.');
+    }
+    if (begun.operation.status !== 'running') return result(operationReceipt(begun.operation, true));
+    return errorResult('operation_in_progress', 'Essa confirmação ainda está em execução.');
+  }
+
+  try {
+    const transaction = await resolveTransaction(input, deps);
+    if (!transaction) {
+      const failed = await deps.failOperation(begun.operation.id, 'transaction_not_found');
+      return result(operationReceipt(failed), 'Transação não encontrada; nada foi alterado.');
+    }
+    if (!transaction.category_id) {
+      const failed = await deps.failOperation(begun.operation.id, 'category_missing');
+      return result(operationReceipt(failed), 'A transação ainda não tem categoria para confirmar.');
+    }
+
+    await deps.reclassifyTransactions([{ id: transaction.id, categoryId: transaction.category_id }]);
+    const saved = await deps.getTransactionById(transaction.id);
+    const verified = saved?.category_id === transaction.category_id && saved.status === 'confirmed';
+    if (!verified) {
+      const failed = await deps.failOperation(begun.operation.id, 'verification_failed');
+      return result(operationReceipt(failed), 'A confirmação não foi gravada no banco.');
+    }
+    const categories = await deps.listCategories();
+    const categoryName = categories.find((category) => category.id === saved.category_id)?.name ?? null;
+    const completed = await deps.completeOperation(begun.operation.id, {
+      ok: true,
+      verified: true,
+      transaction_id: saved.id,
+      review_code: saved.review_code,
+      category_id: saved.category_id,
+      category_name: categoryName,
+      transaction_status: saved.status,
+    });
+    return result(
+      operationReceipt(completed),
+      `Confirmação conferida no banco: ${saved.review_code ?? saved.id}${categoryName ? ` como ${categoryName}` : ''}.`,
+    );
+  } catch (error) {
+    console.error('[mcp] finance_confirm_transaction falhou:', error);
+    const failed = await deps.failOperation(begun.operation.id, 'internal_error');
+    return result(operationReceipt(failed), 'Não consegui concluir e verificar a confirmação.');
+  }
+}
+
 function todayIso(now: Date): string {
   return now.toISOString().slice(0, 10);
 }
@@ -294,6 +376,17 @@ export function createFinanceMcpServer(
       const categoryName = categories.find((category) => category.id === transaction.category_id)?.name ?? null;
       return result({ ok: true, transaction: { ...transaction, category_name: categoryName } });
     },
+  );
+
+  server.registerTool(
+    'finance_confirm_transaction',
+    {
+      title: 'Confirmar categoria sugerida',
+      description: 'Confirma a categoria já sugerida, aprende a regra e relê o banco. Use ao receber o botão Confirmar.',
+      inputSchema: confirmInput,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    async (input) => confirmTransactionWithReceipt(input, deps),
   );
 
   server.registerTool(

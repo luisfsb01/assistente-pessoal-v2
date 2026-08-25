@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ProjectTask } from '../db/projects.js';
 import {
   recordHabitCheckin,
+  recordTaskReminderAnswer,
   updateProjectTaskFromHermes,
   deleteTravelListFromHermes,
   type RoutineMcpDeps,
@@ -19,6 +20,7 @@ const task: ProjectTask = {
 function deps(over: Partial<RoutineMcpDeps> = {}): RoutineMcpDeps {
   let checkin: { done: boolean } | null = null;
   let currentTask = task;
+  let personalTask = { id: 'personal-task-1', title: 'Pagar boleto', status: 'open' as const, dueDate: '2026-08-19', recurrence: null };
   return {
     getUserBySubject: vi.fn(async () => ({ id: 'user-1', name: 'Luis', calendarId: null })),
     listActiveHabits: vi.fn(async () => [{ id: 'habit-1', name: 'Academia', targetPerWeek: 3 }]),
@@ -26,8 +28,12 @@ function deps(over: Partial<RoutineMcpDeps> = {}): RoutineMcpDeps {
     getCheckin: vi.fn(async () => checkin),
     upsertCheckin: vi.fn(async (_habitId, _date, done) => { checkin = { done }; }),
     listOverdueProjectTasks: vi.fn(async () => [{ ...currentTask, projectName: 'Comercial' }]),
+    listOpenProjectTasksForUser: vi.fn(async () => [currentTask]),
     getProjectTaskForUser: vi.fn(async () => currentTask),
     moveProjectTask: vi.fn(async (_id, status) => { currentTask = { ...currentTask, status }; }),
+    listTasks: vi.fn(async () => [personalTask]),
+    getTaskForUser: vi.fn(async (id) => id === personalTask.id ? personalTask : null),
+    completeTask: vi.fn(async () => { personalTask = { ...personalTask, status: 'done' as const }; }),
     listTravelLists: vi.fn(async () => []),
     deleteTravelList: vi.fn(async () => true),
     today: () => '2026-08-19',
@@ -65,6 +71,30 @@ describe('recordHabitCheckin', () => {
   });
 });
 
+describe('recordTaskReminderAnswer', () => {
+  it('conclui pelo código curto e só confirma após reler', async () => {
+    const fake = deps();
+    const response = await recordTaskReminderAnswer({
+      subject: 'luis',
+      task_ref: 'T-PERSONAL',
+      done: true,
+    }, fake);
+    expect(fake.completeTask).toHaveBeenCalledWith('personal-task-1');
+    expect(response.structuredContent).toMatchObject({ ok: true, verified: true, done: true, status: 'done' });
+  });
+
+  it('não conclui quando o usuário informa que ainda não fez', async () => {
+    const fake = deps();
+    const response = await recordTaskReminderAnswer({
+      subject: 'luis',
+      task_ref: 'T-PERSONAL',
+      done: false,
+    }, fake);
+    expect(fake.completeTask).not.toHaveBeenCalled();
+    expect(response.structuredContent).toMatchObject({ ok: true, verified: true, done: false, status: 'open' });
+  });
+});
+
 describe('deleteTravelListFromHermes', () => {
   it('só confirma depois de reler e constatar que a lista saiu', async () => {
     let exists = true;
@@ -94,7 +124,10 @@ describe('updateProjectTaskFromHermes', () => {
   });
 
   it('não altera tarefa que não pertence ao usuário', async () => {
-    const fake = deps({ getProjectTaskForUser: vi.fn(async () => null) });
+    const fake = deps({
+      getProjectTaskForUser: vi.fn(async () => null),
+      listOpenProjectTasksForUser: vi.fn(async () => []),
+    });
     const response = await updateProjectTaskFromHermes({
       subject: 'luis',
       task_id: 'de-outra-pessoa',

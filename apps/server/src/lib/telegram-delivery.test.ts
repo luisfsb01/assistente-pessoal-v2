@@ -13,7 +13,7 @@ describe('telegramDeliveryConfig', () => {
     expect(telegramDeliveryConfig(config())).toEqual({ token: 'bot-antigo', interactionMode: 'buttons' });
   });
 
-  it('usa o bot Hermes sem botões quando seu token está configurado', () => {
+  it('usa o modo Hermes para botões que enviam respostas ao agente', () => {
     expect(telegramDeliveryConfig(config({ HERMES_TELEGRAM_BOT_TOKEN: 'bot-hermes' }))).toEqual({
       token: 'bot-hermes',
       interactionMode: 'hermes',

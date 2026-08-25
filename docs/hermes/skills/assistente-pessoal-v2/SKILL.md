@@ -1,6 +1,6 @@
 ---
 name: assistente-pessoal-v2
-description: Consultar e alterar com segurança os dados do Assistente Pessoal V2, começando pelas finanças.
+description: Consultar e alterar com segurança os dados do Assistente Pessoal V2, incluindo finanças, tarefas, hábitos e lembretes programados com botões.
 ---
 
 # Assistente Pessoal V2
@@ -30,6 +30,17 @@ Quando o usuário disser que fez ou não fez um hábito:
 3. Chame `habit_record_checkin` com nome, dono, resposta e data mencionada (ou hoje).
 4. Só confirme quando o retorno trouxer `verified: true`.
 
+Os botões enviados pelo V2 chegam como texto autossuficiente, por exemplo `✅ Fiz: Academia` e `❌ Não fiz: Academia`. Trate o primeiro como `done: true` e o segundo como `done: false`.
+
+### Tarefas pessoais lembradas no resumo
+
+Quando chegar uma resposta como `✅ Fiz T-1A2B3C4D` ou `❌ Não fiz T-1A2B3C4D`:
+
+1. Determine o dono (`luis` ou `esposa`) pelo remetente.
+2. Chame `task_record_reminder_answer` com a referência `T-...` e `done: true` ou `false`.
+3. `done: true` conclui a tarefa; `done: false` mantém a tarefa aberta para voltar nos próximos resumos.
+4. Só confirme quando o retorno trouxer `verified: true`.
+
 ### Tarefas vencidas de projeto
 
 Quando o usuário responder ao check-in sobre uma tarefa:
@@ -39,6 +50,14 @@ Quando o usuário responder ao check-in sobre uma tarefa:
 3. Chame `project_update_task` apenas quando houver pedido de mudança.
 4. Só confirme quando o retorno trouxer `verified: true`.
 
+Os botões de projeto usam referências `P-...`. Ao receber `✅ Fiz P-...`, chame `project_update_task` com `status: done`. Ao receber `❌ Não fiz P-...`, não altere a tarefa; apenas informe que continua pendente.
+
+### Lembretes programados pelo Hermes
+
+Quando o usuário pedir para programar um lembrete pessoal, configure-o para voltar ao `bot-chat`, não como uma entrega final direta ao Telegram. O texto produzido pelo job deve começar com `[LEMBRETE INTERATIVO]` e trazer o lembrete completo. Ao receber esse texto no bot-chat, use `clarify` com exatamente as escolhas `✅ Feito` e `❌ Não feito`; no Telegram isso gera os botões nativos.
+
+Ao migrar lembretes já existentes, liste os jobs com `cronjob`, altere somente os que são lembretes pessoais e preserve nome, horário, repetição, destino original e demais opções. Não altere rotinas de pesquisa, relatórios ou manutenção. Para um lembrete recorrente, `❌ Não feito` não pausa nem remove a recorrência. Para um lembrete de ocorrência única, apenas registre a resposta na conversa; só reprograme se o usuário pedir.
+
 ### Limpeza de lista de viagem
 
 - “Manter” não exige ferramenta nem alteração.
@@ -46,6 +65,8 @@ Quando o usuário responder ao check-in sobre uma tarefa:
 - A exclusão é destrutiva. Só confirme quando o retorno trouxer `verified: true`.
 
 ## Reclassificação financeira
+
+Quando chegar `✅ Confirmar A045`, chame `finance_confirm_transaction` com `code: A045` e uma `idempotency_key` estável. Se o botão trouxer um ID em vez de código, use `transaction_id`. Só confirme o sucesso quando o recibo trouxer `status: succeeded`, `verified: true`, `verified_at` preenchido e `transaction_status: confirmed`.
 
 1. Identifique a transação pelo código de revisão ou pelo ID. Se necessário, use `finance_list_transactions`.
 2. Se o nome da categoria não estiver exato, consulte `finance_list_categories` antes de alterar.

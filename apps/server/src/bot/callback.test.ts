@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decodeAction, encodeFinAction, encodeHabitAction, encodePtaskAction, encodeTravelCleanupAction } from './callback.js';
+import { decodeAction, encodeFinAction, encodeHabitAction, encodePtaskAction, encodeTaskAction, encodeTravelCleanupAction } from './callback.js';
 
 describe('callback codec', () => {
   it('roundtrip fin:ok', () => {
@@ -7,14 +7,14 @@ describe('callback codec', () => {
     expect(decodeAction(data)).toEqual({ kind: 'fin', action: 'ok', txId: 'abc-123' });
   });
   it('rejeita payloads desconhecidos', () => {
-    expect(decodeAction('task:done:1')).toBeNull();
+    expect(decodeAction('task:nope:1')).toBeNull();
     expect(decodeAction('fin:nope:1')).toBeNull();
     expect(decodeAction('fin:ok:')).toBeNull();
     expect(decodeAction('lixo')).toBeNull();
   });
 });
 
-describe('callbacks de hábito e tarefa de projeto', () => {
+describe('callbacks de hábito e tarefas', () => {
   it('hab codifica e decodifica', () => {
     expect(decodeAction(encodeHabitAction(true, 'h1'))).toEqual({ kind: 'hab', done: true, habitId: 'h1' });
     expect(decodeAction(encodeHabitAction(false, 'h1'))).toEqual({ kind: 'hab', done: false, habitId: 'h1' });
@@ -33,5 +33,9 @@ describe('callback de limpeza de viagem', () => {
   it('codifica apagar e manter', () => {
     expect(decodeAction(encodeTravelCleanupAction('delete', 'trip1'))).toEqual({ kind: 'travel', action: 'delete', listId: 'trip1' });
     expect(decodeAction(encodeTravelCleanupAction('keep', 'trip1'))).toEqual({ kind: 'travel', action: 'keep', listId: 'trip1' });
+  });
+  it('task codifica e decodifica', () => {
+    expect(decodeAction(encodeTaskAction('done', 't1'))).toEqual({ kind: 'task', action: 'done', taskId: 't1' });
+    expect(decodeAction(encodeTaskAction('keep', 't1'))).toEqual({ kind: 'task', action: 'keep', taskId: 't1' });
   });
 });

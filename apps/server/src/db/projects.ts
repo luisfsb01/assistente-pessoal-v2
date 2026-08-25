@@ -155,6 +155,17 @@ export async function getProjectTaskForUser(taskId: string, userId: string): Pro
   return data ? toTask(data as never) : null;
 }
 
+export async function listOpenProjectTasksForUser(userId: string): Promise<ProjectTask[]> {
+  const { data, error } = await supabase
+    .from('project_tasks')
+    .select(`${T_COLS}, projects!inner(user_id, active)`)
+    .neq('status', 'done')
+    .eq('projects.user_id', userId)
+    .eq('projects.active', true);
+  if (error) throw error;
+  return (data ?? []).map((row) => toTask(row as never));
+}
+
 /** Ações abertas de projetos ativos com prazo exatamente na data informada. */
 export async function listProjectTasksDueOn(
   userId: string,

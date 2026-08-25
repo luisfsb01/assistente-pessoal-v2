@@ -341,8 +341,10 @@ e acessa as ferramentas do Assistente V2. Não é necessária nova migração SQ
    docker exec "$(docker ps -q -f name=assistente-v2_assistente-v2 | head -n1)" npm run job:finance
    ```
 
-   A mensagem deve chegar pelo `HermesAgentAssistente`. Responda usando o código,
-   por exemplo `A001 é Transporte`, e confira se o Hermes informa `verified: true`.
+   A mensagem deve chegar pelo `HermesAgentAssistente` com o botão
+   `✅ Confirmar A001`. Toque no botão e confira se o Hermes confirma a releitura
+   do banco. Para trocar a categoria, ainda é possível responder, por exemplo,
+   `A001 é Transporte`.
 
 Para voltar temporariamente ao bot antigo, edite `/root/assistente-pessoal-v2/.env`,
 defina `TELEGRAM_LISTENER_ENABLED=true`, apague o valor de

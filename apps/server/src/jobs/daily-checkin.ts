@@ -1,14 +1,15 @@
-import { InlineKeyboard } from 'grammy';
+import { InlineKeyboard, Keyboard } from 'grammy';
 import { encodeHabitAction, encodePtaskAction } from '../bot/callback.js';
 import { getSubjectChatId, getUserBySubject } from '../db/chats.js';
 import { getCheckin, pendingHabitsFor, upsertCheckin } from '../db/habits.js';
 import { listOverdueProjectTasks } from '../db/projects.js';
 import { getConfig } from '../lib/config.js';
 import { todayInTz } from '../lib/dates.js';
+import { reminderReference } from '../lib/reminder-reference.js';
 
 const MAX_PTASKS = 5;
 
-export type SendWithKb = (chatId: number, text: string, kb?: InlineKeyboard) => Promise<void>;
+export type SendWithKb = (chatId: number, text: string, kb?: InlineKeyboard | Keyboard) => Promise<void>;
 
 export type CheckinDeps = {
   getUserBySubject: typeof getUserBySubject;
@@ -64,9 +65,15 @@ export async function sendNextCheckinQuestion(
   if (pending.length > 0) {
     const h = pending[0];
     if (interactionMode === 'hermes') {
+      const kb = new Keyboard()
+        .text(`✅ Fiz: ${h.name}`)
+        .text(`❌ Não fiz: ${h.name}`)
+        .resized()
+        .oneTime();
       await send(
         chatId,
-        `${h.name} hoje?\nResponda ao Hermes: "Registre o hábito ${h.name} como feito hoje" ou "como não feito hoje".`,
+        `${h.name} hoje?`,
+        kb,
       );
     } else {
       const kb = new InlineKeyboard().text('✅', encodeHabitAction(true, h.id)).text('❌', encodeHabitAction(false, h.id));
@@ -78,10 +85,13 @@ export async function sendNextCheckinQuestion(
   for (const t of overdue) {
     const text = `Tarefa vencida no projeto ${t.projectName}: "${t.title}" (prazo ${ddmm(t.dueDate!)})`;
     if (interactionMode === 'hermes') {
-      await send(
-        chatId,
-        `${text}\nResponda ao Hermes: "Marque a tarefa de projeto ${t.id} como concluída" ou "mantenha pendente".`,
-      );
+      const ref = reminderReference('project-task', t.id);
+      const kb = new Keyboard()
+        .text(`✅ Fiz ${ref}`)
+        .text(`❌ Não fiz ${ref}`)
+        .resized()
+        .oneTime();
+      await send(chatId, `${text}\nReferência: ${ref}`, kb);
     } else {
       const kb = new InlineKeyboard()
         .text('✅ Concluí', encodePtaskAction('done', t.id))

@@ -4,11 +4,14 @@ import { listCommitments, type Commitment } from '../db/finance.js';
 import { listActiveHabits, listCheckinsBetween } from '../db/habits.js';
 import { listProjectTasksDueOn, type ProjectTask } from '../db/projects.js';
 import { listTasks, type Task } from '../db/tasks.js';
+import { InlineKeyboard, Keyboard } from 'grammy';
+import { encodePtaskAction, encodeTaskAction } from '../bot/callback.js';
 import { getConfig } from '../lib/config.js';
 import { addDays, todayInTz } from '../lib/dates.js';
 import { formatBrl } from '../lib/format.js';
 import { getCalendarClient, hasGoogleCreds } from '../lib/google.js';
 import { weekProgress, weekStart, type HabitProgress } from '../services/habit-stats.js';
+import { reminderReference } from '../lib/reminder-reference.js';
 import {
   calendarApiFromGoogle,
   zonedDayEndIso,
@@ -25,6 +28,42 @@ export type BriefingContext = {
   commitmentsToday: Commitment[];
   habits: HabitProgress[] | null;
 };
+
+export type BriefingReplyMarkup = InlineKeyboard | Keyboard;
+
+export function buildBriefingTaskButtons(
+  ctx: Pick<BriefingContext, 'tasks' | 'projectActions'>,
+  interactionMode: 'buttons' | 'hermes',
+): BriefingReplyMarkup | undefined {
+  if (ctx.tasks.length === 0 && ctx.projectActions.length === 0) return undefined;
+  if (interactionMode === 'buttons') {
+    const keyboard = new InlineKeyboard();
+    let rows = 0;
+    for (const task of ctx.tasks) {
+      if (rows++ > 0) keyboard.row();
+      keyboard.text('✅ Fiz', encodeTaskAction('done', task.id)).text('❌ Não fiz', encodeTaskAction('keep', task.id));
+    }
+    for (const task of ctx.projectActions) {
+      if (rows++ > 0) keyboard.row();
+      keyboard.text('✅ Fiz', encodePtaskAction('done', task.id)).text('❌ Não fiz', encodePtaskAction('keep', task.id));
+    }
+    return keyboard;
+  }
+
+  const keyboard = new Keyboard();
+  let rows = 0;
+  for (const task of ctx.tasks) {
+    if (rows++ > 0) keyboard.row();
+    const ref = reminderReference('task', task.id);
+    keyboard.text(`✅ Fiz ${ref}`).text(`❌ Não fiz ${ref}`);
+  }
+  for (const task of ctx.projectActions) {
+    if (rows++ > 0) keyboard.row();
+    const ref = reminderReference('project-task', task.id);
+    keyboard.text(`✅ Fiz ${ref}`).text(`❌ Não fiz ${ref}`);
+  }
+  return keyboard.resized().oneTime();
+}
 
 function ddmm(date: string): string {
   const [, m, d] = date.slice(0, 10).split('-');
@@ -143,8 +182,9 @@ async function contextFor(subject: 'luis' | 'esposa', deps: BriefingDeps): Promi
 
 /** Briefing individual das 07:00 — cada pessoa no seu privado; vazio não é enviado. */
 export async function runDailyBriefing(
-  send: (chatId: number, text: string) => Promise<void>,
+  send: (chatId: number, text: string, kb?: BriefingReplyMarkup) => Promise<void>,
   deps: BriefingDeps = defaultBriefingDeps(),
+  interactionMode: 'buttons' | 'hermes' = 'buttons',
 ): Promise<void> {
   for (const subject of ['luis', 'esposa'] as const) {
     try {
@@ -157,7 +197,7 @@ export async function runDailyBriefing(
       const chatId = await deps.getSubjectChatId(subject);
       if (chatId === null) continue;
       const text = formatDailyBriefing(r.ctx);
-      await send(chatId, text);
+      await send(chatId, text, buildBriefingTaskButtons(r.ctx, interactionMode));
       await deps.markBriefed(r.queuedIds);
     } catch (err) {
       console.error(`[briefing] falhou para ${subject}:`, err);

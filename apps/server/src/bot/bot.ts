@@ -7,6 +7,7 @@ import { confirmTransaction, getTransactionById, learnRule } from '../db/finance
 import { getChatIdentity, getUserBySubject } from '../db/chats.js';
 import { getHabitById } from '../db/habits.js';
 import { moveProjectTask } from '../db/projects.js';
+import { completeTask, getTaskForUser } from '../db/tasks.js';
 import { deleteTravelList } from '../db/lists.js';
 import { getConfig } from '../lib/config.js';
 import { todayInTz } from '../lib/dates.js';
@@ -96,6 +97,31 @@ export function createBot(
           await ctx
             .editMessageText(`📌 ${ctx.callbackQuery.message?.text?.split('\n')[0] ?? 'Lista de viagem'} — mantida`)
             .catch(() => {});
+        }
+        return;
+      }
+
+      if (action.kind === 'task') {
+        if (identity.kind !== 'private' || !identity.subject) {
+          await ctx.answerCallbackQuery({ text: 'Não autorizado.' });
+          return;
+        }
+        const user = await getUserBySubject(identity.subject);
+        const task = user ? await getTaskForUser(action.taskId, user.id) : null;
+        if (!task) {
+          await ctx.answerCallbackQuery({ text: 'Tarefa não encontrada.' });
+          return;
+        }
+        if (action.action === 'done') {
+          await completeTask(task.id);
+          const saved = await getTaskForUser(task.id, user!.id);
+          if (saved?.status !== 'done') throw new Error('A conclusão da tarefa não foi confirmada.');
+          await ctx.answerCallbackQuery({ text: 'Feita e conferida ✅' });
+          await ctx
+            .editMessageText(`✅ ${ctx.callbackQuery.message?.text?.split('\n')[0] ?? 'Tarefa feita'}`)
+            .catch(() => {});
+        } else {
+          await ctx.answerCallbackQuery({ text: 'Ok, segue pendente' });
         }
         return;
       }

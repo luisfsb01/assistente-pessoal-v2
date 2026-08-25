@@ -86,6 +86,17 @@ export async function completeTask(taskId: string): Promise<void> {
   if (error) throw error;
 }
 
+export async function getTaskForUser(taskId: string, userId: string): Promise<Task | null> {
+  const { data, error } = await supabase
+    .from('tasks')
+    .select(TASK_COLUMNS)
+    .eq('id', taskId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? toTask(data) : null;
+}
+
 export async function updateTask(
   taskId: string,
   patch: { title?: string; dueDate?: string | null },

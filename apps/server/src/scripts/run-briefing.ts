@@ -4,6 +4,11 @@ import { getConfig } from '../lib/config.js';
 import { runDailyBriefing } from '../jobs/briefing.js';
 import { telegramDeliveryConfig } from '../lib/telegram-delivery.js';
 
-const bot = new Bot(telegramDeliveryConfig(getConfig()).token);
-await runDailyBriefing((chatId, text) => bot.api.sendMessage(chatId, text).then(() => undefined));
+const delivery = telegramDeliveryConfig(getConfig());
+const bot = new Bot(delivery.token);
+await runDailyBriefing(
+  (chatId, text, kb) => bot.api.sendMessage(chatId, text, kb ? { reply_markup: kb } : undefined).then(() => undefined),
+  undefined,
+  delivery.interactionMode,
+);
 console.log('briefing executado');

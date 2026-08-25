@@ -65,12 +65,12 @@ set_env_key() {
   fi
 }
 
-for tool in habit_list_pending habit_record_checkin project_list_overdue_tasks project_update_task travel_delete_list knowledge_save_content knowledge_save_url knowledge_search; do
+for tool in finance_confirm_transaction habit_list_pending habit_record_checkin task_list_due task_record_reminder_answer project_list_overdue_tasks project_update_task travel_delete_list knowledge_save_content knowledge_save_url knowledge_search; do
   if ! grep -q -- "- ${tool}$" "$HERMES_CONFIG"; then
     sed -i "/^[[:space:]]*- operations_list_receipts$/a\\        - ${tool}" "$HERMES_CONFIG"
   fi
 done
-for tool in habit_list_pending habit_record_checkin project_list_overdue_tasks project_update_task travel_delete_list knowledge_save_content knowledge_save_url knowledge_search; do
+for tool in finance_confirm_transaction habit_list_pending habit_record_checkin task_list_due task_record_reminder_answer project_list_overdue_tasks project_update_task travel_delete_list knowledge_save_content knowledge_save_url knowledge_search; do
   if ! grep -q -- "- ${tool}$" "$HERMES_CONFIG"; then
     echo "Não consegui adicionar ${tool} em $HERMES_CONFIG. Restaure o backup e confira o bloco tools.include." >&2
     exit 1
@@ -99,6 +99,7 @@ echo
 echo "Migração concluída:"
 echo "- listener do bot Assistente Pessoal: desativado"
 echo "- rotinas do V2: entregues pelo bot Hermes"
+echo "- confirmações financeiras e lembretes: botões ativados no Hermes"
 echo "- ferramentas de hábitos e tarefas: adicionadas ao Hermes"
 echo "- segundo cérebro: salvamento e busca adicionados ao Hermes"
 echo

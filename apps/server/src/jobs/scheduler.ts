@@ -1,5 +1,5 @@
 import cron from 'node-cron';
-import type { Bot } from 'grammy';
+import type { Bot, InlineKeyboard, Keyboard } from 'grammy';
 import { getConfig } from '../lib/config.js';
 import { hasGoogleCreds } from '../lib/google.js';
 import { isBankConfigured } from '../lib/banco-mcp.js';
@@ -24,7 +24,8 @@ export function startScheduler(
   const cfg = getConfig();
   const interactionMode = options.interactionMode ?? 'buttons';
   const opts = { timezone: cfg.TIMEZONE };
-  const send = (chatId: number, text: string) => bot.api.sendMessage(chatId, text).then(() => undefined);
+  const send = (chatId: number, text: string, kb?: InlineKeyboard | Keyboard) =>
+    bot.api.sendMessage(chatId, text, kb ? { reply_markup: kb } : undefined).then(() => undefined);
   const cycle = (sources: CollectorSource[], label: string) => () => {
     runProactiveCycle(sources, send).catch((err) => console.error(`[job:proactive:${label}]`, err));
   };
@@ -62,7 +63,7 @@ export function startScheduler(
   // Rotinas visíveis (Fase 8): horário e on/off vêm do app_state.routines_config
   // (editável no web; mudança vale no minuto seguinte, sem restart).
   const routineJobs: Record<RoutineKey, () => Promise<void>> = {
-    briefing: () => runDailyBriefing(send),
+    briefing: () => runDailyBriefing(send, undefined, interactionMode),
     coupleBriefing: () => runCoupleBriefing(send),
     financeReview: () => runFinanceReview(bot, { interactionMode }),
     checkin: () =>

@@ -1,5 +1,5 @@
 import type { Bot } from 'grammy';
-import { InlineKeyboard } from 'grammy';
+import { InlineKeyboard, Keyboard } from 'grammy';
 import { encodeFinAction } from '../bot/callback.js';
 import { getSubjectChatId } from '../db/chats.js';
 import {
@@ -32,9 +32,19 @@ export function formatReviewLine(
 ): string {
   const [, m, d] = tx.occurred_on.split('-');
   const instruction = interactionMode === 'hermes'
-    ? `(responda ao Hermes: "${code ?? 'A001'} é ${catName}" para confirmar, ou informe outra categoria)`
+    ? `(use o botão Confirmar abaixo; para trocar, responda: "${code ?? 'A001'} é <categoria>")`
     : `(✅ confirma; para trocar, responda: "${code ?? 'A001'} é <categoria>")`;
   return `${code ? `[${code}] ` : ''}${d}/${m}: ${tx.description} — ${formatBrl(Number(tx.amount))}\n🏷 ${catName}\n${instruction}`;
+}
+
+export function buildHermesFinanceButtons(references: string[]): Keyboard | undefined {
+  if (references.length === 0) return undefined;
+  const keyboard = new Keyboard();
+  references.forEach((reference, index) => {
+    if (index > 0) keyboard.row();
+    keyboard.text(`✅ Confirmar ${reference}`);
+  });
+  return keyboard.resized().oneTime();
 }
 
 /** Revisão diária: importa do banco, sugere categorias e envia os pendentes
@@ -109,6 +119,7 @@ export async function runFinanceReview(
     chatId,
     `💸 Gastos para revisar (${pending.length})${extra > 0 ? `, mostrando os ${toReview.length} mais antigos:` : ':'}`,
   );
+  const hermesReferences: string[] = [];
   for (const t of toReview) {
     const suggested = suggestions.get(t.id);
     // só exibe a sugestão se ela foi gravada (senão o ✅ confirmaria algo diferente do mostrado)
@@ -126,6 +137,14 @@ export async function runFinanceReview(
       await bot.api.sendMessage(chatId, formatReviewLine(t, code, catName), { reply_markup: kb });
     } else {
       await bot.api.sendMessage(chatId, formatReviewLine(t, code, catName, 'hermes'));
+      hermesReferences.push(code ?? t.id);
+    }
+  }
+
+  if (interactionMode === 'hermes') {
+    const kb = buildHermesFinanceButtons(hermesReferences);
+    if (kb) {
+      await bot.api.sendMessage(chatId, 'Confirme as sugestões com um toque:', { reply_markup: kb });
     }
   }
 

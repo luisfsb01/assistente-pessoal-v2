@@ -3,6 +3,7 @@ export type FinCallbackAction = 'ok';
 export type BotAction =
   | { kind: 'fin'; action: FinCallbackAction; txId: string }
   | { kind: 'hab'; done: boolean; habitId: string }
+  | { kind: 'task'; action: 'done' | 'keep'; taskId: string }
   | { kind: 'ptask'; action: 'done' | 'keep'; taskId: string }
   | { kind: 'travel'; action: 'delete' | 'keep'; listId: string };
 
@@ -18,6 +19,10 @@ export function encodePtaskAction(action: 'done' | 'keep', taskId: string): stri
   return `ptask:${action}:${taskId}`;
 }
 
+export function encodeTaskAction(action: 'done' | 'keep', taskId: string): string {
+  return `task:${action}:${taskId}`;
+}
+
 export function encodeTravelCleanupAction(action: 'delete' | 'keep', listId: string): string {
   return `travel:${action}:${listId}`;
 }
@@ -27,6 +32,7 @@ export function decodeAction(data: string): BotAction | null {
   if (!id) return null;
   if (kind === 'fin' && action === 'ok') return { kind: 'fin', action, txId: id };
   if (kind === 'hab' && (action === 'sim' || action === 'nao')) return { kind: 'hab', done: action === 'sim', habitId: id };
+  if (kind === 'task' && (action === 'done' || action === 'keep')) return { kind: 'task', action, taskId: id };
   if (kind === 'ptask' && (action === 'done' || action === 'keep')) return { kind: 'ptask', action, taskId: id };
   if (kind === 'travel' && (action === 'delete' || action === 'keep')) return { kind: 'travel', action, listId: id };
   return null;
