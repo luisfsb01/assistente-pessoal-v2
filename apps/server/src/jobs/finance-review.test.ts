@@ -1,6 +1,6 @@
 import '../test-setup.js';
 import { describe, expect, it } from 'vitest';
-import { buildHermesFinanceButtons, formatReviewLine } from './finance-review.js';
+import { buildHermesFinanceButton, formatReviewLine } from './finance-review.js';
 
 describe('formatReviewLine', () => {
   it('mostra código, data curta BR, valor em R$ e categoria', () => {
@@ -30,12 +30,16 @@ describe('formatReviewLine', () => {
     expect(line).toContain('A002 é <categoria>');
   });
 
-  it('monta um botão autossuficiente para cada transação no Hermes', () => {
-    const kb = buildHermesFinanceButtons(['A001', 'A002']);
-    expect(kb).toMatchObject({
-      keyboard: [[{ text: '✅ Confirmar A001' }], [{ text: '✅ Confirmar A002' }]],
-      resize_keyboard: true,
-      one_time_keyboard: true,
+  it('monta um botão inline autossuficiente e independente para cada transação no Hermes', () => {
+    const first = buildHermesFinanceButton('A001');
+    const second = buildHermesFinanceButton('A002');
+
+    expect(first).toMatchObject({
+      inline_keyboard: [[{ text: '✅ Confirmar A001', callback_data: 'apv2:fin:A001' }]],
     });
+    expect(second).toMatchObject({
+      inline_keyboard: [[{ text: '✅ Confirmar A002', callback_data: 'apv2:fin:A002' }]],
+    });
+    expect(first).not.toBe(second);
   });
 });

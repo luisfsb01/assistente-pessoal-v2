@@ -1,5 +1,5 @@
 import type { Bot } from 'grammy';
-import { InlineKeyboard, Keyboard } from 'grammy';
+import { InlineKeyboard } from 'grammy';
 import { encodeFinAction } from '../bot/callback.js';
 import { getSubjectChatId } from '../db/chats.js';
 import {
@@ -37,14 +37,8 @@ export function formatReviewLine(
   return `${code ? `[${code}] ` : ''}${d}/${m}: ${tx.description} — ${formatBrl(Number(tx.amount))}\n🏷 ${catName}\n${instruction}`;
 }
 
-export function buildHermesFinanceButtons(references: string[]): Keyboard | undefined {
-  if (references.length === 0) return undefined;
-  const keyboard = new Keyboard();
-  references.forEach((reference, index) => {
-    if (index > 0) keyboard.row();
-    keyboard.text(`✅ Confirmar ${reference}`);
-  });
-  return keyboard.resized().oneTime();
+export function buildHermesFinanceButton(reference: string): InlineKeyboard {
+  return new InlineKeyboard().text(`✅ Confirmar ${reference}`, `apv2:fin:${reference}`);
 }
 
 /** Revisão diária: importa do banco, sugere categorias e envia os pendentes
@@ -119,7 +113,6 @@ export async function runFinanceReview(
     chatId,
     `💸 Gastos para revisar (${pending.length})${extra > 0 ? `, mostrando os ${toReview.length} mais antigos:` : ':'}`,
   );
-  const hermesReferences: string[] = [];
   for (const t of toReview) {
     const suggested = suggestions.get(t.id);
     // só exibe a sugestão se ela foi gravada (senão o ✅ confirmaria algo diferente do mostrado)
@@ -136,15 +129,10 @@ export async function runFinanceReview(
       const kb = new InlineKeyboard().text('✅ Confirmar', encodeFinAction('ok', t.id));
       await bot.api.sendMessage(chatId, formatReviewLine(t, code, catName), { reply_markup: kb });
     } else {
-      await bot.api.sendMessage(chatId, formatReviewLine(t, code, catName, 'hermes'));
-      hermesReferences.push(code ?? t.id);
-    }
-  }
-
-  if (interactionMode === 'hermes') {
-    const kb = buildHermesFinanceButtons(hermesReferences);
-    if (kb) {
-      await bot.api.sendMessage(chatId, 'Confirme as sugestões com um toque:', { reply_markup: kb });
+      const reference = code ?? t.id;
+      await bot.api.sendMessage(chatId, formatReviewLine(t, code, catName, 'hermes'), {
+        reply_markup: buildHermesFinanceButton(reference),
+      });
     }
   }
 
