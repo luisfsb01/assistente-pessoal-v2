@@ -226,7 +226,14 @@ describe('importTravelReservationsFromGmail', () => {
     expect(generate.mock.calls[0]?.[0].system).toContain('não exija que o nome ou o motivo da viagem apareçam');
     expect(generate.mock.calls[0]?.[0].prompt).toContain('Data de referência:');
     expect(out.candidateHints).toEqual(expect.arrayContaining([
-      expect.objectContaining({ subject: email.subject, score: expect.any(Number) }),
+      expect.objectContaining({
+        subject: email.subject,
+        score: expect.any(Number),
+        matched: false,
+        confidence: 'high',
+        reason: 'Confirmação explícita',
+        reservationCount: 0,
+      }),
     ]));
   });
 });

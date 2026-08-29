@@ -50,7 +50,16 @@ export type TravelEmailImportResult = {
   emailsAnalyzed: number;
   emailsMatched: number;
   reservationsSaved: number;
-  candidateHints?: Array<{ date: string; from: string; subject: string; score: number }>;
+  candidateHints?: Array<{
+    date: string;
+    from: string;
+    subject: string;
+    score: number;
+    matched: boolean;
+    confidence: TravelEmailExtraction['confidence'];
+    reason: string;
+    reservationCount: number;
+  }>;
   errorCode?: 'trip_not_found' | 'gmail_not_configured' | 'verification_failed';
 };
 
@@ -306,12 +315,24 @@ export async function importTravelReservationsFromGmail(
     }
   }
   const savedTrip = await deps.getTripWithReservations(trip.id);
-  const candidateHints = candidates.slice(0, 10).map((email) => ({
-    date: new Date(email.internalDate).toISOString(),
-    from: email.from.slice(0, 200),
-    subject: email.subject.slice(0, 300),
-    score: scoreTravelEmailCandidate(trip, email),
-  }));
+  const decisionsByEmailId = new Map(
+    analyzed
+      .filter((result): result is NonNullable<typeof result> => result !== null)
+      .map((result) => [result.email.id, result.extracted] as const),
+  );
+  const candidateHints = candidates.slice(0, 10).map((email) => {
+    const decision = decisionsByEmailId.get(email.id);
+    return {
+      date: new Date(email.internalDate).toISOString(),
+      from: email.from.slice(0, 200),
+      subject: email.subject.slice(0, 300),
+      score: scoreTravelEmailCandidate(trip, email),
+      matched: decision?.matched ?? false,
+      confidence: decision?.confidence ?? 'low',
+      reason: (decision?.reason ?? 'Falha ao analisar o candidato.').slice(0, 500),
+      reservationCount: decision?.reservations.length ?? 0,
+    };
+  });
   return {
     ok: savedTrip !== null,
     trip: savedTrip,

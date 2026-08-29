@@ -2,15 +2,15 @@
 status: investigating
 trigger: 'A funcionalidade de viagens no Hermes atualiza o roteiro de "Casamento Caio e Miriam", mas travel_import_gmail analisa 59 e-mails e retorna zero reservas para voos São José do Rio Preto → Fortaleza, volta por Natal, e hotéis em Fortaleza, Grossos e Natal.'
 created: 2026-08-26T21:20:52.4455331-03:00
-updated: 2026-08-29T16:31:00-03:00
+updated: 2026-08-29T16:40:00-03:00
 ---
 
 ## Current Focus
 
-hypothesis: A busca e o ranking já estão precisos, mas o extrator rejeita confirmações compatíveis porque a viagem ainda não tem datas e o nome/motivo não aparecem nos comprovantes.
-test: Permitir alta confiança para confirmação futura com fornecedor/localizador e rota/cidade compatível, além de retornar pistas dos candidatos quando o resultado continuar vazio.
-expecting: Reservas futuras compatíveis são salvas mesmo quando o e-mail não menciona o casamento; se ainda não houver correspondência, os assuntos/remetentes dos principais candidatos explicam o descarte.
-next_action: Enviar e implantar a regra de associação sem datas, então repetir o teste real.
+hypothesis: Os comprovantes corretos chegam ao extrator, mas ele os rejeita por um requisito ainda desconhecido no conteúdo; apenas assunto/remetente não explica a decisão.
+test: Expor, junto de cada pista candidata, matched, confidence, reason e quantidade de reservas produzidas pelo julgamento, sem expor o corpo do e-mail.
+expecting: O próximo teste real mostrará a justificativa exata para LATAM Fortaleza e Vai de Promo, permitindo corrigir a regra responsável sem aceitar ofertas ou viagens antigas.
+next_action: Implantar o diagnóstico das decisões e repetir a busca real.
 
 ## Symptoms
 
@@ -109,11 +109,16 @@ started: Comportamento observado após a integração/migração da funcionalida
   found: O extrator agora aceita como alta confiança confirmação futura com fornecedor/localizador e rota/cidade compatível sem exigir nome/motivo no e-mail. Resultados vazios retornam até dez pistas com data, remetente, assunto e score. Dezoito testes focados e typecheck passaram.
   implication: A associação deixa de depender das datas ausentes da viagem sem relaxar a exigência de confirmação efetiva e compatibilidade explícita; qualquer novo vazio será diagnosticável.
 
+- timestamp: 2026-08-29T16:37:00-03:00
+  checked: Teste real após deploy do commit c6fba7a.
+  found: A busca concluiu com 18 candidatos e zero reservas. As pistas identificaram dois e-mails de 2026 diretamente compatíveis: LATAM, assunto “Você já comprou sua viagem a Fortaleza”, de 13/05/2026, e Vai de Promo, passagem emitida, de 06/05/2026. Os demais candidatos eram viagens antigas ou destinos incompatíveis.
+  implication: Busca e ranking estão entregando os comprovantes corretos ao extrator; o falso negativo restante está exclusivamente no julgamento do conteúdo. É necessário registrar a justificativa segura do extrator para corrigir a condição exata.
+
 ## Resolution
 
 root_cause: A importação perdia confirmações antes da extração: buscava somente destination+name truncados a quatro palavras (ignorando notes e aeroportos), restringia e-mails a 45 dias antes da viagem, pedia apenas 30 por consulta e avaliava os 40 mais antigos, enquanto gmail.ts limitava a paginação a 50 e descartava anexos. O resultado real de 59 e-mails é a assinatura exata das duas buscas de 30 quase sem sobreposição.
 fix: Queries usam destination+notes+name+purpose, cidades/aeroportos, tipos de reserva e plataformas comuns; janela foi ampliada para dois anos; Gmail pagina até 200 e extrai anexos PDF/DOCX/texto apenas nesta funcionalidade. IDs já vistos são excluídos antes do carregamento, anexos incompatíveis são filtrados antes do download, fallbacks param com candidatos fortes e somente os 30 melhores chegam ao extrator. O prompt inclui notes/anexos, o MCP diferencia encontrados de analisados e a skill Hermes preserva roteiros multi-cidade. O carregamento de mensagens/anexos usa concorrência máxima 8 e a análise usa concorrência máxima 6, com gravações sequenciais. Códigos de aeroporto exigem maiúsculas no ranking e FOR só aparece em consultas combinado com outra localidade da rota. Viagens sem datas podem associar confirmação futura com fornecedor/localizador e rota/cidade compatível; resultados vazios retornam pistas dos candidatos.
-verification: Suíte completa anterior com 81 arquivos/438 testes; timeout real eliminado no Telegram; refinamento reduziu o conjunto real de 160 para 18 candidatos. Após a regra de associação sem datas e diagnósticos, 18 testes focados e typecheck passaram. Falta repetir a validação real para confirmar reservas ou inspecionar as pistas.
+verification: Suíte completa anterior com 81 arquivos/438 testes; timeout real eliminado no Telegram; refinamento reduziu o conjunto real de 160 para 18 candidatos. O teste real confirmou que LATAM Fortaleza e Vai de Promo estão entre os candidatos, mas continuam rejeitados. Falta implantar as justificativas por candidato e repetir a validação para identificar a condição exata.
 files_changed:
   - apps/server/src/lib/gmail.ts
   - apps/server/src/lib/gmail.test.ts

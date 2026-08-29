@@ -56,9 +56,14 @@ describe('travel MCP writes', () => {
   it('expõe pistas dos candidatos quando nenhuma reserva é salva', async () => {
     const fake = deps({ importFromGmail: vi.fn(async () => ({
       ok: true, trip: { ...trip, reservations: [] }, emailsFound: 3, emailsAnalyzed: 3, emailsMatched: 0, reservationsSaved: 0,
-      candidateHints: [{ date: '2026-08-20T12:00:00Z', from: 'hotel@example.com', subject: 'Reserva Fortaleza', score: 9 }],
+      candidateHints: [{
+        date: '2026-08-20T12:00:00Z', from: 'hotel@example.com', subject: 'Reserva Fortaleza', score: 9,
+        matched: false, confidence: 'medium' as const, reason: 'Falta a data da hospedagem.', reservationCount: 0,
+      }],
     })) });
     const out = await importTripGmailFromHermes({ subject: 'luis', trip_name: trip.name }, fake);
-    expect(out.structuredContent).toMatchObject({ candidate_hints: [expect.objectContaining({ subject: 'Reserva Fortaleza' })] });
+    expect(out.structuredContent).toMatchObject({ candidate_hints: [expect.objectContaining({
+      subject: 'Reserva Fortaleza', confidence: 'medium', reason: 'Falta a data da hospedagem.',
+    })] });
   });
 });
