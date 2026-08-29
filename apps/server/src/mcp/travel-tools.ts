@@ -149,6 +149,7 @@ export async function importTripGmailFromHermes(
     emails_analyzed: imported.emailsAnalyzed,
     emails_matched: imported.emailsMatched,
     reservations_saved: imported.reservationsSaved,
+    ...(imported.candidateHints ? { candidate_hints: imported.candidateHints } : {}),
     ...(imported.trip ? payload(imported.trip) : {}),
   }, imported.reservationsSaved > 0
     ? `${imported.reservationsSaved} reserva(s) encontrada(s) no Gmail, salva(s) e conferida(s).`

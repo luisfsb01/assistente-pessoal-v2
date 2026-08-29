@@ -215,4 +215,18 @@ describe('importTravelReservationsFromGmail', () => {
 
     expect(generate.mock.calls[0]?.[0].prompt).toContain('Grossos');
   });
+
+  it('orienta associação segura quando as datas da viagem ainda serão extraídas do e-mail', async () => {
+    const withoutDates = { ...trip, startDate: null, endDate: null, destination: 'Fortaleza e Natal' };
+    const generate = vi.fn(async () => extraction({ matched: false, reservations: [] }));
+    const fake = deps({ findTripByName: vi.fn(async () => withoutDates), generate });
+
+    const out = await importTravelReservationsFromGmail(withoutDates.name, fake);
+
+    expect(generate.mock.calls[0]?.[0].system).toContain('não exija que o nome ou o motivo da viagem apareçam');
+    expect(generate.mock.calls[0]?.[0].prompt).toContain('Data de referência:');
+    expect(out.candidateHints).toEqual(expect.arrayContaining([
+      expect.objectContaining({ subject: email.subject, score: expect.any(Number) }),
+    ]));
+  });
 });
