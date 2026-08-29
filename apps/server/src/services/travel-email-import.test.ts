@@ -219,6 +219,62 @@ describe('importTravelReservationsFromGmail', () => {
     expect(searchEmails).toHaveBeenCalledTimes(2);
   });
 
+  it('executa a consulta de hotéis antes de interromper fallbacks em roteiro multicidade', async () => {
+    const multiCity = {
+      ...trip,
+      destination: 'São José do Rio Preto para Fortaleza, volta por Natal',
+      notes: 'Hotéis em Fortaleza, Grossos e Natal',
+    };
+    const strong = Array.from({ length: 12 }, (_, index): GmailSearchEmail => ({
+      ...email,
+      id: `route-${index}`,
+      subject: `Reserva confirmada SJP FOR ${index}`,
+      bodyText: `Voo SJP FOR confirmado, localizador ABC${index}`,
+    }));
+    const searchEmails = vi.fn(async () => strong);
+    const fake = deps({
+      findTripByName: vi.fn(async () => multiCity),
+      searchEmails,
+      generate: vi.fn(async () => extraction({ matched: false, reservations: [] })),
+    });
+
+    await importTravelReservationsFromGmail(multiCity.name, fake);
+
+    expect(searchEmails.mock.calls.map(([query]) => query).some((query) => query.includes('{hotel hospedagem'))).toBe(true);
+  });
+
+  it('reserva parte do teto de análise para confirmações de hotel', async () => {
+    const flights = Array.from({ length: 30 }, (_, index): GmailSearchEmail => ({
+      ...email,
+      id: `flight-noise-${index}`,
+      subject: `Reserva de voo confirmada SJP FOR NAT ${index}`,
+      bodyText: `Bilhete e localizador confirmados SJP FOR NAT ABC${index}`,
+    }));
+    const hotel = {
+      ...email,
+      id: 'hotel-grossos',
+      subject: 'Hospedagem confirmada em Grossos',
+      bodyText: 'Pousada em Grossos reservada. Voucher HOTEL123.',
+    };
+    const hotelExtraction = extraction({
+      reservations: [{
+        sourceItemKey: 'hotel-HOTEL123', kind: 'hotel', provider: 'Pousada Grossos', confirmationCode: 'HOTEL123',
+        status: 'booked', startAt: null, endAt: null, timezone: null, origin: null, destination: 'Grossos',
+        address: 'Grossos, RN', summary: 'Pousada confirmada em Grossos', details: { segments: [], notes: null },
+      }],
+    });
+    const generate = vi.fn(async ({ prompt }: { prompt: string }) => (
+      prompt.includes('HOTEL123') ? hotelExtraction : extraction({ matched: false, reservations: [] })
+    ));
+    const fake = deps({ searchEmails: vi.fn(async () => [...flights, hotel]), generate });
+
+    const out = await importTravelReservationsFromGmail(trip.name, fake);
+
+    expect(generate.mock.calls.some(([call]) => call.prompt.includes('HOTEL123'))).toBe(true);
+    expect(generate).toHaveBeenCalledTimes(18);
+    expect(out.reservationsSaved).toBe(1);
+  });
+
   it('fornece notes ao extrator para validar hotéis das cidades do roteiro', async () => {
     const withNotes = { ...trip, notes: 'Hospedagens esperadas em Fortaleza, Grossos e Natal' };
     const generate = vi.fn(async () => extraction({ matched: false, reservations: [] }));

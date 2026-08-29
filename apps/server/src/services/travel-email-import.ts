@@ -77,8 +77,9 @@ export type TravelEmailImportResult = {
 const DAY_MS = 86_400_000;
 
 const SEARCH_RESULT_LIMIT = 80;
-const EXTRACTION_LIMIT = 30;
+const EXTRACTION_LIMIT = 18;
 const EXTRACTION_CONCURRENCY = 6;
+const HOTEL_EXTRACTION_QUOTA = 10;
 const MIN_STRONG_CANDIDATES = 10;
 const STRONG_CANDIDATE_SCORE = 8;
 const SEARCH_STOP_WORDS = new Set([
@@ -164,8 +165,8 @@ export function buildTravelEmailQueries(trip: Trip): string[] {
   }
   return [...new Set([
     ...routeQueries,
-    `in:anywhere ${dateTerm} ${flightTypes}${contextual}`,
     `in:anywhere ${dateTerm} ${hotelTypes}${contextual}`,
+    `in:anywhere ${dateTerm} ${flightTypes}${contextual}`,
     `in:anywhere ${dateTerm} ${providers}${contextual}`,
     `in:anywhere ${dateTerm} ${allTypes}${contextual}`,
     `in:anywhere ${dateTerm} ${allTypes}`,
@@ -225,6 +226,11 @@ export function scoreTravelEmailCandidate(trip: Trip, email: GmailSearchEmail): 
   return score;
 }
 
+function looksLikeHotelCandidate(email: GmailSearchEmail): boolean {
+  const content = normalized(`${email.from} ${email.subject} ${email.snippet} ${email.bodyText} ${email.attachmentText ?? ''}`);
+  return /(?:^|\s)(hotel|hospedagem|pousada|resort|airbnb|booking|check in|check out|quarto|diaria|voucher)(?:\s|$)/.test(content);
+}
+
 async function mapConcurrent<T, R>(items: readonly T[], concurrency: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const results = new Array<R>(items.length);
   let next = 0;
@@ -260,6 +266,9 @@ export async function importTravelReservationsFromGmail(
 
   const byId = new Map<string, GmailSearchEmail>();
   const queries = buildTravelEmailQueries(trip);
+  const coreQueryCount = matchedAirportTermGroups(trip).length > 1
+    ? (matchedAirportTermGroups(trip).length * (matchedAirportTermGroups(trip).length - 1)) / 2 + 2
+    : 2;
   for (const [index, query] of queries.entries()) {
     for (const email of await deps.searchEmails(query, SEARCH_RESULT_LIMIT, {
       includeAttachments: true,
@@ -267,9 +276,10 @@ export async function importTravelReservationsFromGmail(
     })) {
       if (email.id) byId.set(email.id, email);
     }
-    // As duas primeiras consultas cobrem voos e hotéis. As demais são fallback para
-    // provedores/tipos genéricos e só valem o custo quando ainda faltam sinais fortes.
-    if (index >= 1) {
+    // Todas as consultas dirigidas de rota, hotéis e voos precisam rodar. As demais
+    // são fallback para provedores/tipos genéricos e só valem o custo quando ainda
+    // faltam sinais fortes.
+    if (index + 1 >= coreQueryCount) {
       const strongCandidates = [...byId.values()]
         .filter((email) => scoreTravelEmailCandidate(trip, email) >= STRONG_CANDIDATE_SCORE).length;
       if (strongCandidates >= MIN_STRONG_CANDIDATES) break;
@@ -278,10 +288,24 @@ export async function importTravelReservationsFromGmail(
 
   let emailsMatched = 0;
   let reservationsSaved = 0;
-  const candidates = [...byId.values()].sort((a, b) => {
+  const rankedCandidates = [...byId.values()].sort((a, b) => {
     const score = scoreTravelEmailCandidate(trip, b) - scoreTravelEmailCandidate(trip, a);
     return score || b.internalDate - a.internalDate;
-  }).slice(0, EXTRACTION_LIMIT);
+  });
+  const generalQuota = EXTRACTION_LIMIT - HOTEL_EXTRACTION_QUOTA;
+  const selectedById = new Map<string, GmailSearchEmail>();
+  for (const email of rankedCandidates.slice(0, generalQuota)) selectedById.set(email.id, email);
+  for (const email of rankedCandidates.filter(looksLikeHotelCandidate).slice(0, HOTEL_EXTRACTION_QUOTA)) {
+    selectedById.set(email.id, email);
+  }
+  for (const email of rankedCandidates) {
+    if (selectedById.size >= EXTRACTION_LIMIT) break;
+    selectedById.set(email.id, email);
+  }
+  const candidates = [...selectedById.values()].sort((a, b) => {
+    const score = scoreTravelEmailCandidate(trip, b) - scoreTravelEmailCandidate(trip, a);
+    return score || b.internalDate - a.internalDate;
+  });
   const analyzed = await mapConcurrent(candidates, EXTRACTION_CONCURRENCY, async (email) => {
     try {
       return {

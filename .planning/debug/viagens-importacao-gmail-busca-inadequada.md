@@ -2,15 +2,15 @@
 status: investigating
 trigger: 'A funcionalidade de viagens no Hermes atualiza o roteiro de "Casamento Caio e Miriam", mas travel_import_gmail analisa 59 e-mails e retorna zero reservas para voos São José do Rio Preto → Fortaleza, volta por Natal, e hotéis em Fortaleza, Grossos e Natal.'
 created: 2026-08-26T21:20:52.4455331-03:00
-updated: 2026-08-29T16:50:00-03:00
+updated: 2026-08-29T17:15:00-03:00
 ---
 
 ## Current Focus
 
-hypothesis: O schema de resposta do extrator é rejeitado pela API porque details usa z.record(z.unknown()), convertido para additionalProperties={}, incompatível com Structured Outputs estrito da OpenAI.
-test: Substituir details por objeto fechado com segments e notes e verificar o JSON Schema produzido, além dos testes do importador.
-expecting: As chamadas deixam de falhar antes do julgamento e os e-mails LATAM/Vai de Promo passam a produzir decisões e reservas extraíveis.
-next_action: Validar, implantar e repetir a busca real.
+hypothesis: A extração de voos está resolvida, mas o early stop considera apenas quantidade de candidatos fortes e pode interromper antes da consulta de hotéis em roteiros com várias consultas de pares de aeroportos.
+test: Exigir a execução de todas as consultas dirigidas de rota, hotel e voo e reservar 10 das 18 análises para candidatos com sinais de hospedagem.
+expecting: A busca preserva os dois voos já encontrados e passa a avaliar os comprovantes de Fortaleza, Grossos e Natal dentro do mesmo limite de 18 chamadas.
+next_action: Validar, implantar e repetir a busca para importar os hotéis.
 
 ## Symptoms
 
@@ -124,11 +124,16 @@ started: Comportamento observado após a integração/migração da funcionalida
   found: details: z.record(z.unknown()) vira additionalProperties={}, formato não aceito pelo modo estrito de Structured Outputs da OpenAI. Nenhum outro schema de generateAgentObject no projeto usa mapa livre.
   implication: A falha uniforme das 18 chamadas tem uma causa determinística no contrato de resposta. details precisa ser um objeto fechado.
 
+- timestamp: 2026-08-29T17:08:00-03:00
+  checked: Teste real após deploy do schema fechado no commit cca036e e releitura pelo travel_get_summary.
+  found: A importação salvou e verificou duas reservas: LATAM em 28/10/2026, São José do Rio Preto → Brasília → Fortaleza, e Azul em 05/11/2026, registrada como São José do Rio Preto → Natal. A releitura confirmou exatamente duas reservas no banco. Nenhum hotel foi analisado/salvo.
+  implication: Structured Outputs e persistência estão corrigidos. O bloqueio restante dos hotéis está na seleção de consultas/candidatos, não mais na extração nem no banco.
+
 ## Resolution
 
 root_cause: A importação tinha falhas sucessivas de recuperação e execução: buscava contexto truncado, ignorava notes/aeroportos/anexos, cortava candidatos e executava lentamente. Após corrigir recall, ranking e timeout, a causa final do resultado vazio era details: z.record(z.unknown()) no schema do extrator, convertido para additionalProperties={}, incompatível com Structured Outputs estrito; por isso todas as chamadas generate falhavam antes do julgamento.
-fix: Queries usam destination+notes+name+purpose, cidades/aeroportos, tipos de reserva e plataformas comuns; janela foi ampliada para dois anos; Gmail pagina e extrai anexos suportados. Há deduplicação, ranking e concorrência limitada. Códigos de aeroporto exigem maiúsculas e FOR só aparece combinado com outra localidade. Viagens sem datas aceitam confirmação futura compatível. O schema do extrator agora usa details fechado, com segments estruturados e notes, eliminando propriedades livres incompatíveis.
-verification: Suíte completa anterior com 81 arquivos/438 testes; timeout real eliminado no Telegram; refinamento reduziu o conjunto real de 160 para 18 candidatos e confirmou LATAM Fortaleza/Vai de Promo. Falta validar localmente o novo schema fechado e repetir a prova real após implantação.
+fix: Queries usam destination+notes+name+purpose, cidades/aeroportos, tipos de reserva e plataformas comuns; janela foi ampliada para dois anos; Gmail pagina e extrai anexos suportados. Há deduplicação, ranking e concorrência limitada. Códigos de aeroporto exigem maiúsculas e FOR só aparece combinado com outra localidade. Viagens sem datas aceitam confirmação futura compatível. O schema do extrator usa details fechado, com segments estruturados e notes. Todas as consultas dirigidas de rota, hotel e voo são obrigatórias antes do early stop, e 10 das 18 vagas de extração ficam reservadas a hospedagens.
+verification: O teste real após o schema fechado salvou e releu duas reservas de voo no banco, comprovando extração e persistência. Falta validar localmente a cota de hotéis e repetir a prova real para Fortaleza, Grossos e Natal.
 files_changed:
   - apps/server/src/lib/gmail.ts
   - apps/server/src/lib/gmail.test.ts
