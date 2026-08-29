@@ -1,16 +1,16 @@
 ---
-status: awaiting_human_verify
+status: resolved
 trigger: "A rotina financeira não está satisfatória: no Hermes os botões de confirmar das transações aparecem juntos no final e, ao confirmar a primeira, todos os demais somem."
 created: 2026-08-26T20:31:51.8224598-03:00
-updated: 2026-08-26T22:28:00-03:00
+updated: 2026-08-29T12:22:00-03:00
 ---
 
 ## Current Focus
 
-hypothesis: A regressão está corrigida localmente; resta confirmar na VPS que o processo Hermes foi realmente reiniciado e que dois callbacks de mensagens diferentes continuam independentes no Telegram real.
-test: Executar a ativação até retorno zero, abrir a revisão financeira e confirmar duas transações em mensagens diferentes.
-expecting: Cada mensagem exibe seu próprio botão; confirmar a primeira remove somente o botão dela, e a segunda permanece clicável e confirma normalmente.
-next_action: Aguardar verificação humana no ambiente real Telegram/VPS.
+hypothesis: Confirmada: o V2 atualizado emitia os botões individuais, mas o adapter do processo Hermes na VPS ainda não continha o handler APV2_FINANCE_CALLBACK_BEGIN.
+test: Aplicar o ativador no Python real do Hermes, reiniciar o gateway de usuário e confirmar transações por dois botões no Telegram.
+expecting: Cada toque confirma a transação correspondente e mantém os demais botões utilizáveis.
+next_action: Nenhuma para a regressão financeira; a remoção do serviço systemd antigo e inoperante é uma limpeza operacional separada.
 
 ## Symptoms
 
@@ -128,9 +128,54 @@ started: Funcionava antes da migração para Hermes; regrediu após a migração
   found: npm test encerrou com código zero: 81 arquivos e 428 testes passaram. Os dois cenários de ativação/restart passaram dentro da suíte completa; nenhum processo de teste permaneceu ativo.
   implication: A flutuação por contenção foi eliminada e tanto a correção funcional quanto o comportamento fail-closed do deploy estão protegidos pela regressão ampla.
 
+- timestamp: 2026-08-29T11:27:13-03:00
+  checked: Verificação humana no Telegram após o commit 364c8f0.
+  found: Os botões individuais "✅ Confirmar Axxx" aparecem sob as respectivas transações, mas tocar neles não produz resposta nem confirmação.
+  implication: A entrega do InlineKeyboard pelo V2 está ativa; a falha está depois do clique, no recebimento/roteamento do callback pelo gateway Hermes ou no despacho ao agente.
+
+- timestamp: 2026-08-29T11:27:13-03:00
+  checked: Estado local do Git antes da retomada.
+  found: master, HEAD e origin/master apontam para 364c8f0. Há mudanças locais somente na funcionalidade de viagens e arquivos de outras sessões de debug; nenhuma delas pertence ao patch financeiro.
+  implication: O commit foi enviado ao remoto, mas isso não prova a ativação do adapter na VPS. As mudanças de viagens devem permanecer intocadas.
+
+- timestamp: 2026-08-29T11:29:10-03:00
+  checked: Busca por operações de deploy, Hermes e VPS no repositório.
+  found: A ativação é centralizada em scripts/activate-hermes-telegram.sh; o deploy do serviço usa scripts/deploy-pull.sh; docs/hermes/INSTALACAO.md documenta a operação via terminal da Hostinger. Não apareceu host SSH versionado na busca inicial.
+  implication: O script de ativação e a documentação precisam ser lidos integralmente antes de inferir o processo ativo ou executar qualquer ação remota.
+
+- timestamp: 2026-08-29T11:32:40-03:00
+  checked: Scripts integrais activate-hermes-telegram.sh, deploy-pull.sh, patch-hermes-finance-callback.mjs e guia Hermes.
+  found: deploy-pull.sh atualiza/reinicia somente o serviço Docker V2. O patch do adapter e o restart real do gateway ocorrem exclusivamente em activate-hermes-telegram.sh. O cron documentado chama apenas deploy-pull.sh. O ativador resolve o adapter pelo mesmo Python do executável hermes, instala o marcador, compila e chama hermes gateway restart.
+  implication: O sintoma é exatamente compatível com o commit ter chegado automaticamente ao V2 sem que a etapa manual de ativação do gateway tenha sido executada. Essa hipótese agora deve ser testada diretamente na VPS.
+
+- timestamp: 2026-08-29T11:34:05-03:00
+  checked: Git remote e metadados SSH locais.
+  found: O remote Git é HTTPS do GitHub e não existe ~/.ssh/config nem inventário visível de chaves nesta conta.
+  implication: Não há alvo SSH configurado que possa ser usado com segurança. O acesso versionado/documentado restante é o terminal da VPS no painel Hostinger.
+
+- timestamp: 2026-08-29T11:36:30-03:00
+  checked: Sessão atual do navegador integrado.
+  found: Não há abas abertas nem uma aba do painel que possa ser reivindicada.
+  implication: É necessário abrir diretamente o painel oficial e verificar se a autenticação persiste; nenhuma ação remota foi realizada.
+
+- timestamp: 2026-08-29T12:16:30-03:00
+  checked: Ativação na VPS autenticada e estado do gateway Hermes.
+  found: O repositório remoto já estava em 364c8f0. O ativador instalou APV2_FINANCE_CALLBACK_BEGIN no adapter real em /usr/local/lib/hermes-agent/plugins/platforms/telegram/adapter.py, compilou o arquivo, atualizou o V2 e reiniciou o gateway de usuário com sucesso.
+  implication: O processo que recebe os callbacks do Telegram passou a executar o handler versionado. O override HERMES_PYTHON apontou para /usr/local/lib/hermes-agent/venv/bin/python porque /usr/local/bin/hermes é um wrapper Bash.
+
+- timestamp: 2026-08-29T12:20:00-03:00
+  checked: Alerta de serviços Hermes duplicados.
+  found: O gateway de usuário está ativo. A unidade antiga /etc/systemd/system/hermes-gateway.service está habilitada, mas falha com status 200/CHDIR e entra em auto-restart; portanto ela não estava processando os callbacks.
+  implication: A unidade antiga deve ser removida em manutenção separada, mediante autorização, mas não bloqueia a correção funcional validada.
+
+- timestamp: 2026-08-29T12:22:00-03:00
+  checked: Teste humano de ponta a ponta no Telegram após a ativação.
+  found: O usuário clicou nos botões individuais e confirmou que as transações foram efetivamente confirmadas.
+  implication: A correção está validada no ambiente real, incluindo entrega do callback, roteamento pelo Hermes e confirmação financeira.
+
 ## Resolution
 
 root_cause: O commit 083a981 agregou as 15 confirmações do modo Hermes em um único ReplyKeyboardMarkup one_time_keyboard. Reply keyboards são globais ao chat e não pertencem às mensagens; ao primeiro toque o Telegram envia o texto e oculta o teclado completo. A implementação evitou InlineKeyboard porque o Hermes detém o long polling e ignora callback_data arbitrário, mas essa limitação não foi resolvida, apenas contornada com UX incompatível com o requisito.
 fix: InlineKeyboard individual por transação no V2 e handler estreito/aplicado idempotentemente no gateway Hermes para converter o callback autorizado em texto de confirmação ao agente, removendo apenas o markup da mensagem clicada. O script de ativação faz backup e py_compile; após o deploy do V2, uma falha de restart mantém o adapter persistido, retorna erro e exige restart real (sem recomendar /reload-mcp, que não recarrega Python).
-verification: Testes focados do job e patcher 7/7; integração de ativação/restart 2/2; suíte completa 81 arquivos e 428 testes; typecheck e build aprovados; patch aplicado e compilado contra o adapter oficial Hermes 77001a6; segunda aplicação idempotente; bash -n, node --check e git diff --check aprovados. Pendente confirmação humana no Telegram/VPS após restart real do gateway.
+verification: Testes focados do job e patcher 7/7; integração de ativação/restart 2/2; suíte completa 81 arquivos e 428 testes; typecheck e build aprovados; patch aplicado e compilado contra o adapter oficial Hermes 77001a6; segunda aplicação idempotente; bash -n, node --check e git diff --check aprovados; ativação na VPS concluída e confirmação humana de ponta a ponta aprovada no Telegram.
 files_changed: [apps/server/src/jobs/finance-review.ts, apps/server/src/jobs/finance-review.test.ts, scripts/patch-hermes-finance-callback.mjs, apps/server/src/lib/hermes-finance-callback-patch.test.ts, apps/server/src/lib/hermes-activation.test.ts, scripts/activate-hermes-telegram.sh]
