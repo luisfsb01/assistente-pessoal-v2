@@ -5,6 +5,17 @@ import { gmailApiFromGoogle, type GmailSearchEmail, type GmailSearchOptions } fr
 import { getGmailClient, hasGoogleCreds } from '../lib/google.js';
 import { generateAgentObject } from '../agent/models.js';
 
+const reservationDetailsSchema = z.object({
+  segments: z.array(z.object({
+    flightNumber: z.string().nullable(),
+    origin: z.string().nullable(),
+    destination: z.string().nullable(),
+    departureAt: z.string().nullable(),
+    arrivalAt: z.string().nullable(),
+  })).max(12),
+  notes: z.string().max(4_000).nullable(),
+});
+
 const reservationSchema = z.object({
   sourceItemKey: z.string().min(1).max(120),
   kind: z.enum(['flight', 'hotel', 'car', 'transfer', 'event', 'other']),
@@ -18,17 +29,17 @@ const reservationSchema = z.object({
   destination: z.string().nullable(),
   address: z.string().nullable(),
   summary: z.string().min(3).max(500),
-  details: z.record(z.unknown()),
+  details: reservationDetailsSchema,
 });
 
-const extractionSchema = z.object({
+export const travelEmailExtractionSchema = z.object({
   matched: z.boolean(),
   confidence: z.enum(['high', 'medium', 'low']),
   reason: z.string().max(500),
   reservations: z.array(reservationSchema).max(12),
 });
 
-export type TravelEmailExtraction = z.infer<typeof extractionSchema>;
+export type TravelEmailExtraction = z.infer<typeof travelEmailExtractionSchema>;
 
 export type TravelEmailImportDeps = {
   findTripByName(name: string): Promise<Trip | null>;
@@ -167,6 +178,7 @@ Extraia somente fatos explícitos de confirmação, alteração ou cancelamento 
 Nunca invente datas, horários, fusos, aeroportos, localizadores, endereços ou fornecedores.
 Use matched=true e confidence=high apenas quando o e-mail estiver claramente relacionado à viagem. Propaganda, orçamento, busca, carrinho e oferta não são reserva.
 Se a viagem ainda não tiver datas, não exija que o nome ou o motivo da viagem apareçam no e-mail. Uma confirmação pode ter confidence=high quando trouxer reserva efetiva, fornecedor ou localizador, data futura e rota/cidade explicitamente compatível com o roteiro informado. Rejeite reservas passadas, canceladas sem substituição ou com destino incompatível.
+Em details, sempre retorne segments (use [] quando não for voo) e notes (use null quando não houver detalhe adicional).
 Um único e-mail pode conter vários trechos de voo; nesse caso, use uma reserva kind=flight com os trechos em details.segments, startAt no primeiro embarque e endAt no último desembarque.
 sourceItemKey deve ser curto e estável dentro do e-mail, como flight-LOCALIZADOR, hotel-LOCALIZADOR ou car-LOCALIZADOR. Se não houver localizador, use kind-1, kind-2.
 Datas em startAt/endAt precisam ser ISO 8601 com fuso explícito. Se o fuso não estiver explícito ou inequivocamente associado ao local, use null e preserve a data/hora textual em details.
@@ -274,7 +286,7 @@ export async function importTravelReservationsFromGmail(
     try {
       return {
         email,
-        extracted: await deps.generate({ purpose: 'judgment', system: SYSTEM, prompt: extractionPrompt(trip, email), schema: extractionSchema }),
+        extracted: await deps.generate({ purpose: 'judgment', system: SYSTEM, prompt: extractionPrompt(trip, email), schema: travelEmailExtractionSchema }),
       };
     } catch (error) {
       console.error(`[travel-email] falha ao processar e-mail ${email.id}:`, error);

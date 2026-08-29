@@ -1,11 +1,13 @@
 import '../test-setup.js';
 import { describe, expect, it, vi } from 'vitest';
+import { zodSchema } from 'ai';
 import type { Trip, TripWithReservations } from '../db/trips.js';
 import type { GmailSearchEmail } from '../lib/gmail.js';
 import {
   buildTravelEmailQueries,
   importTravelReservationsFromGmail,
   scoreTravelEmailCandidate,
+  travelEmailExtractionSchema,
   type TravelEmailImportDeps,
   type TravelEmailExtraction,
 } from './travel-email-import.js';
@@ -29,7 +31,13 @@ function extraction(over: Partial<TravelEmailExtraction> = {}): TravelEmailExtra
       sourceItemKey: 'flight-ABC123', kind: 'flight', provider: 'Azul', confirmationCode: 'ABC123',
       status: 'booked', startAt: '2026-10-10T09:00:00-03:00', endAt: '2026-10-10T11:30:00-03:00',
       timezone: 'America/Sao_Paulo', origin: 'REC', destination: 'GRU', address: null,
-      summary: 'Voo REC–GRU confirmado', details: { flightNumber: 'AD1234' },
+      summary: 'Voo REC–GRU confirmado', details: {
+        segments: [{
+          flightNumber: 'AD1234', origin: 'REC', destination: 'GRU',
+          departureAt: '2026-10-10T09:00:00-03:00', arrivalAt: '2026-10-10T11:30:00-03:00',
+        }],
+        notes: null,
+      },
     }],
     ...over,
   };
@@ -48,6 +56,11 @@ function deps(over: Partial<TravelEmailImportDeps> = {}): TravelEmailImportDeps 
 }
 
 describe('buildTravelEmailQueries', () => {
+  it('gera esquema estruturado compatível, sem mapa de propriedades livres', async () => {
+    const schema = await zodSchema(travelEmailExtractionSchema).jsonSchema;
+    expect(JSON.stringify(schema)).not.toContain('"additionalProperties":{}');
+  });
+
   it('limita por período e inclui contexto da viagem', () => {
     const queries = buildTravelEmailQueries(trip);
     expect(queries[0]).toContain('after:');

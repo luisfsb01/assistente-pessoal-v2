@@ -2,15 +2,15 @@
 status: investigating
 trigger: 'A funcionalidade de viagens no Hermes atualiza o roteiro de "Casamento Caio e Miriam", mas travel_import_gmail analisa 59 e-mails e retorna zero reservas para voos São José do Rio Preto → Fortaleza, volta por Natal, e hotéis em Fortaleza, Grossos e Natal.'
 created: 2026-08-26T21:20:52.4455331-03:00
-updated: 2026-08-29T16:40:00-03:00
+updated: 2026-08-29T16:50:00-03:00
 ---
 
 ## Current Focus
 
-hypothesis: Os comprovantes corretos chegam ao extrator, mas ele os rejeita por um requisito ainda desconhecido no conteúdo; apenas assunto/remetente não explica a decisão.
-test: Expor, junto de cada pista candidata, matched, confidence, reason e quantidade de reservas produzidas pelo julgamento, sem expor o corpo do e-mail.
-expecting: O próximo teste real mostrará a justificativa exata para LATAM Fortaleza e Vai de Promo, permitindo corrigir a regra responsável sem aceitar ofertas ou viagens antigas.
-next_action: Implantar o diagnóstico das decisões e repetir a busca real.
+hypothesis: O schema de resposta do extrator é rejeitado pela API porque details usa z.record(z.unknown()), convertido para additionalProperties={}, incompatível com Structured Outputs estrito da OpenAI.
+test: Substituir details por objeto fechado com segments e notes e verificar o JSON Schema produzido, além dos testes do importador.
+expecting: As chamadas deixam de falhar antes do julgamento e os e-mails LATAM/Vai de Promo passam a produzir decisões e reservas extraíveis.
+next_action: Validar, implantar e repetir a busca real.
 
 ## Symptoms
 
@@ -114,11 +114,21 @@ started: Comportamento observado após a integração/migração da funcionalida
   found: A busca concluiu com 18 candidatos e zero reservas. As pistas identificaram dois e-mails de 2026 diretamente compatíveis: LATAM, assunto “Você já comprou sua viagem a Fortaleza”, de 13/05/2026, e Vai de Promo, passagem emitida, de 06/05/2026. Os demais candidatos eram viagens antigas ou destinos incompatíveis.
   implication: Busca e ranking estão entregando os comprovantes corretos ao extrator; o falso negativo restante está exclusivamente no julgamento do conteúdo. É necessário registrar a justificativa segura do extrator para corrigir a condição exata.
 
+- timestamp: 2026-08-29T16:44:00-03:00
+  checked: Teste real após deploy do diagnóstico do commit 6942e4c.
+  found: Todos os 18 candidatos retornaram a justificativa de fallback “Falha ao analisar o candidato”, confiança baixa, matched=false e zero reservas. Isso só ocorre no catch em torno de generate; nenhuma decisão do modelo foi produzida.
+  implication: O problema não é o limiar de confiança nem a associação da viagem. Todas as chamadas de Structured Outputs falham tecnicamente antes do julgamento.
+
+- timestamp: 2026-08-29T16:48:00-03:00
+  checked: JSON Schema gerado pelo AI SDK para o schema atual.
+  found: details: z.record(z.unknown()) vira additionalProperties={}, formato não aceito pelo modo estrito de Structured Outputs da OpenAI. Nenhum outro schema de generateAgentObject no projeto usa mapa livre.
+  implication: A falha uniforme das 18 chamadas tem uma causa determinística no contrato de resposta. details precisa ser um objeto fechado.
+
 ## Resolution
 
-root_cause: A importação perdia confirmações antes da extração: buscava somente destination+name truncados a quatro palavras (ignorando notes e aeroportos), restringia e-mails a 45 dias antes da viagem, pedia apenas 30 por consulta e avaliava os 40 mais antigos, enquanto gmail.ts limitava a paginação a 50 e descartava anexos. O resultado real de 59 e-mails é a assinatura exata das duas buscas de 30 quase sem sobreposição.
-fix: Queries usam destination+notes+name+purpose, cidades/aeroportos, tipos de reserva e plataformas comuns; janela foi ampliada para dois anos; Gmail pagina até 200 e extrai anexos PDF/DOCX/texto apenas nesta funcionalidade. IDs já vistos são excluídos antes do carregamento, anexos incompatíveis são filtrados antes do download, fallbacks param com candidatos fortes e somente os 30 melhores chegam ao extrator. O prompt inclui notes/anexos, o MCP diferencia encontrados de analisados e a skill Hermes preserva roteiros multi-cidade. O carregamento de mensagens/anexos usa concorrência máxima 8 e a análise usa concorrência máxima 6, com gravações sequenciais. Códigos de aeroporto exigem maiúsculas no ranking e FOR só aparece em consultas combinado com outra localidade da rota. Viagens sem datas podem associar confirmação futura com fornecedor/localizador e rota/cidade compatível; resultados vazios retornam pistas dos candidatos.
-verification: Suíte completa anterior com 81 arquivos/438 testes; timeout real eliminado no Telegram; refinamento reduziu o conjunto real de 160 para 18 candidatos. O teste real confirmou que LATAM Fortaleza e Vai de Promo estão entre os candidatos, mas continuam rejeitados. Falta implantar as justificativas por candidato e repetir a validação para identificar a condição exata.
+root_cause: A importação tinha falhas sucessivas de recuperação e execução: buscava contexto truncado, ignorava notes/aeroportos/anexos, cortava candidatos e executava lentamente. Após corrigir recall, ranking e timeout, a causa final do resultado vazio era details: z.record(z.unknown()) no schema do extrator, convertido para additionalProperties={}, incompatível com Structured Outputs estrito; por isso todas as chamadas generate falhavam antes do julgamento.
+fix: Queries usam destination+notes+name+purpose, cidades/aeroportos, tipos de reserva e plataformas comuns; janela foi ampliada para dois anos; Gmail pagina e extrai anexos suportados. Há deduplicação, ranking e concorrência limitada. Códigos de aeroporto exigem maiúsculas e FOR só aparece combinado com outra localidade. Viagens sem datas aceitam confirmação futura compatível. O schema do extrator agora usa details fechado, com segments estruturados e notes, eliminando propriedades livres incompatíveis.
+verification: Suíte completa anterior com 81 arquivos/438 testes; timeout real eliminado no Telegram; refinamento reduziu o conjunto real de 160 para 18 candidatos e confirmou LATAM Fortaleza/Vai de Promo. Falta validar localmente o novo schema fechado e repetir a prova real após implantação.
 files_changed:
   - apps/server/src/lib/gmail.ts
   - apps/server/src/lib/gmail.test.ts
