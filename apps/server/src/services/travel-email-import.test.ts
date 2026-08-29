@@ -5,6 +5,7 @@ import type { GmailSearchEmail } from '../lib/gmail.js';
 import {
   buildTravelEmailQueries,
   importTravelReservationsFromGmail,
+  scoreTravelEmailCandidate,
   type TravelEmailImportDeps,
   type TravelEmailExtraction,
 } from './travel-email-import.js';
@@ -71,6 +72,16 @@ describe('buildTravelEmailQueries', () => {
     expect(all).toContain('NAT');
     expect(all).toContain('LATAM');
     expect(all).toContain('Booking');
+    expect(queries.filter((query) => /\bFOR\b/.test(query)).every((query) => /\b(?:SJP|NAT)\b/.test(query))).toBe(true);
+  });
+
+  it('não confunde o código FOR com a palavra inglesa for no ranking', () => {
+    const fortalezaTrip = { ...trip, destination: 'Fortaleza' };
+    const lowercase = { ...email, subject: 'Confirmation for your booking', bodyText: 'Thank you for your booking.' };
+    const airportCode = { ...lowercase, bodyText: 'Flight confirmed: SJP → FOR. Localizador ABC123.' };
+
+    expect(scoreTravelEmailCandidate(fortalezaTrip, airportCode))
+      .toBeGreaterThan(scoreTravelEmailCandidate(fortalezaTrip, lowercase));
   });
 
   it('inclui reservas compradas com antecedência maior que 45 dias', () => {

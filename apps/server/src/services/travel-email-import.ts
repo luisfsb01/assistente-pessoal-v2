@@ -82,13 +82,17 @@ function normalized(value: string): string {
     .toLocaleLowerCase('pt-BR').replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+function matchedAirportTermGroups(trip: Trip): string[][] {
+  const corpus = normalized([trip.destination, trip.notes, trip.name, trip.purpose].filter(Boolean).join(' '));
+  return AIRPORT_ALIASES
+    .filter((alias) => alias.patterns.some((pattern) => corpus.includes(pattern)))
+    .map((alias) => [...alias.terms]);
+}
+
 function travelContextTerms(trip: Trip): string[] {
   const raw = [trip.destination, trip.notes, trip.name, trip.purpose].filter(Boolean).join(' ');
-  const corpus = normalized(raw);
   const terms: string[] = [];
-  for (const alias of AIRPORT_ALIASES) {
-    if (alias.patterns.some((pattern) => corpus.includes(pattern))) terms.push(...alias.terms);
-  }
+  for (const group of matchedAirportTermGroups(trip)) terms.push(...group);
   const tokens = raw.replace(/[^\p{L}\p{N}]+/gu, ' ').split(/\s+/).filter(Boolean);
   for (const token of tokens) {
     const key = normalized(token);
@@ -124,8 +128,21 @@ export function buildTravelEmailQueries(trip: Trip): string[] {
     dateTerm = 'newer_than:5y';
   }
   const context = travelContextTerms(trip);
-  const contextual = context.length > 0 ? ` {${context.map(gmailTerm).join(' ')}}` : '';
+  // FOR é um código de aeroporto válido, mas isolado equivale à palavra inglesa
+  // "for" e polui buscas amplas. Códigos continuam nas consultas de pares de rota.
+  const broadContext = context.filter((term) => term !== 'FOR');
+  const contextual = broadContext.length > 0 ? ` {${broadContext.map(gmailTerm).join(' ')}}` : '';
+  const airportGroups = matchedAirportTermGroups(trip);
+  const routeQueries: string[] = [];
+  for (let left = 0; left < airportGroups.length; left++) {
+    for (let right = left + 1; right < airportGroups.length; right++) {
+      routeQueries.push(
+        `in:anywhere ${dateTerm} ${flightTypes} {${airportGroups[left]!.map(gmailTerm).join(' ')}} {${airportGroups[right]!.map(gmailTerm).join(' ')}}`,
+      );
+    }
+  }
   return [...new Set([
+    ...routeQueries,
     `in:anywhere ${dateTerm} ${flightTypes}${contextual}`,
     `in:anywhere ${dateTerm} ${hotelTypes}${contextual}`,
     `in:anywhere ${dateTerm} ${providers}${contextual}`,
@@ -158,18 +175,21 @@ function hasOffset(value: string | null): value is string {
   return value !== null && /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value) && Number.isFinite(Date.parse(value));
 }
 
-function containsNormalizedTerm(content: string, term: string): boolean {
-  if (term.length === 3 && /^[a-z]{3}$/.test(term)) return (` ${content} `).includes(` ${term} `);
-  return content.includes(term);
+function containsTravelTerm(rawContent: string, normalizedContent: string, term: string): boolean {
+  if (/^[A-Z]{3}$/.test(term)) {
+    return new RegExp(`(?:^|[^A-Z0-9])${term}(?:[^A-Z0-9]|$)`).test(rawContent);
+  }
+  return normalizedContent.includes(normalized(term));
 }
 
-function candidateScore(trip: Trip, email: GmailSearchEmail): number {
+export function scoreTravelEmailCandidate(trip: Trip, email: GmailSearchEmail): number {
   const subject = normalized(email.subject);
-  const content = normalized(`${email.from} ${email.subject} ${email.snippet} ${email.bodyText} ${email.attachmentText ?? ''}`);
+  const rawContent = `${email.from} ${email.subject} ${email.snippet} ${email.bodyText} ${email.attachmentText ?? ''}`;
+  const content = normalized(rawContent);
   let score = 0;
   for (const term of travelContextTerms(trip)) {
     const key = normalized(term);
-    if (key && containsNormalizedTerm(content, key)) score += key.length === 3 && /^[a-z]{3}$/.test(key) ? 5 : 3;
+    if (key && containsTravelTerm(rawContent, content, term)) score += /^[A-Z]{3}$/.test(term) ? 5 : 3;
   }
   for (const signal of ['confirm', 'localizador', 'itinerario', 'bilhete', 'ticket', 'voucher', 'check in', 'booking', 'reserva']) {
     if (content.includes(signal)) score += 2;
@@ -226,7 +246,7 @@ export async function importTravelReservationsFromGmail(
     // provedores/tipos genéricos e só valem o custo quando ainda faltam sinais fortes.
     if (index >= 1) {
       const strongCandidates = [...byId.values()]
-        .filter((email) => candidateScore(trip, email) >= STRONG_CANDIDATE_SCORE).length;
+        .filter((email) => scoreTravelEmailCandidate(trip, email) >= STRONG_CANDIDATE_SCORE).length;
       if (strongCandidates >= MIN_STRONG_CANDIDATES) break;
     }
   }
@@ -234,7 +254,7 @@ export async function importTravelReservationsFromGmail(
   let emailsMatched = 0;
   let reservationsSaved = 0;
   const candidates = [...byId.values()].sort((a, b) => {
-    const score = candidateScore(trip, b) - candidateScore(trip, a);
+    const score = scoreTravelEmailCandidate(trip, b) - scoreTravelEmailCandidate(trip, a);
     return score || b.internalDate - a.internalDate;
   }).slice(0, EXTRACTION_LIMIT);
   const analyzed = await mapConcurrent(candidates, EXTRACTION_CONCURRENCY, async (email) => {

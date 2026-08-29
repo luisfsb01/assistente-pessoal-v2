@@ -2,15 +2,15 @@
 status: investigating
 trigger: 'A funcionalidade de viagens no Hermes atualiza o roteiro de "Casamento Caio e Miriam", mas travel_import_gmail analisa 59 e-mails e retorna zero reservas para voos São José do Rio Preto → Fortaleza, volta por Natal, e hotéis em Fortaleza, Grossos e Natal.'
 created: 2026-08-26T21:20:52.4455331-03:00
-updated: 2026-08-29T14:46:00-03:00
+updated: 2026-08-29T16:24:00-03:00
 ---
 
 ## Current Focus
 
-hypothesis: A cobertura de busca está corrigida, mas o carregamento de mensagens/anexos e as análises ainda sequenciais excedem o timeout de 60 segundos do MCP no ambiente real.
-test: Implantar a concorrência limitada para Gmail e extração, recarregar o MCP e repetir o pedido completo no Telegram.
-expecting: A ferramenta conclui antes de 60 segundos, informa encontrados/analisados e salva apenas confirmações de alta confiança.
-next_action: Enviar o ajuste de concorrência, aguardar o deploy automático, recarregar o MCP e repetir o teste real.
+hypothesis: O timeout foi resolvido, mas o código de aeroporto FOR é confundido com a palavra inglesa “for”, poluindo as consultas amplas e o ranking dos 30 candidatos.
+test: Implantar consultas por pares de rota e ranking de códigos sensível a maiúsculas, depois repetir a importação real.
+expecting: Os candidatos analisados priorizam e-mails com SJP/FOR/NAT como códigos de aeroporto e confirmações dos hotéis do roteiro.
+next_action: Enviar e implantar o refinamento de precisão, então repetir o teste autorizado no Telegram.
 
 ## Symptoms
 
@@ -89,11 +89,21 @@ started: Comportamento observado após a integração/migração da funcionalida
   found: Mensagens completas e anexos agora são carregados com concorrência máxima 8; julgamentos usam concorrência máxima 6 e as gravações continuam sequenciais. Os testes de pico confirmam mais de uma operação simultânea sem ultrapassar os limites. Os 23 testes focados e o typecheck passaram.
   implication: O caminho crítico foi reduzido sem relaxar confidence=high nem introduzir gravações concorrentes; falta verificar o tempo na caixa real.
 
+- timestamp: 2026-08-29T16:20:00-03:00
+  checked: Teste real após deploy do commit f9ec12a.
+  found: A ferramenta concluiu dentro do limite e retornou 160 e-mails encontrados, 30 analisados, zero confirmações seguras e zero reservas salvas.
+  implication: A correção de desempenho foi validada. O conjunto amplo continua com baixa precisão e o problema agora está no ranking/consulta, não em timeout ou registro do MCP.
+
+- timestamp: 2026-08-29T16:24:00-03:00
+  checked: Auditoria dos termos de aeroporto e regressão de precisão.
+  found: O termo FOR era normalizado para “for” e somava cinco pontos em qualquer e-mail inglês com essa palavra; também aparecia isolado nas consultas amplas. O ranking agora exige códigos de três letras em maiúsculas e as consultas com FOR exigem outro grupo de aeroporto, como SJP ou NAT. Doze testes focados e typecheck passaram.
+  implication: E-mails genéricos em inglês deixam de ocupar o corte dos 30 candidatos, enquanto comprovantes com rotas reais preservam a pontuação alta.
+
 ## Resolution
 
 root_cause: A importação perdia confirmações antes da extração: buscava somente destination+name truncados a quatro palavras (ignorando notes e aeroportos), restringia e-mails a 45 dias antes da viagem, pedia apenas 30 por consulta e avaliava os 40 mais antigos, enquanto gmail.ts limitava a paginação a 50 e descartava anexos. O resultado real de 59 e-mails é a assinatura exata das duas buscas de 30 quase sem sobreposição.
-fix: Queries usam destination+notes+name+purpose, cidades/aeroportos, tipos de reserva e plataformas comuns; janela foi ampliada para dois anos; Gmail pagina até 200 e extrai anexos PDF/DOCX/texto apenas nesta funcionalidade. IDs já vistos são excluídos antes do carregamento, anexos incompatíveis são filtrados antes do download, fallbacks param com candidatos fortes e somente os 30 melhores chegam ao extrator. O prompt inclui notes/anexos, o MCP diferencia encontrados de analisados e a skill Hermes preserva roteiros multi-cidade. O carregamento de mensagens/anexos usa concorrência máxima 8 e a análise usa concorrência máxima 6, com gravações sequenciais.
-verification: Suíte completa anterior com 81 arquivos/438 testes; após reproduzir o timeout real, 23 testes focados e typecheck passaram com limites de concorrência verificados. Falta repetir a validação no Gmail/Telegram real após implantação do ajuste de desempenho.
+fix: Queries usam destination+notes+name+purpose, cidades/aeroportos, tipos de reserva e plataformas comuns; janela foi ampliada para dois anos; Gmail pagina até 200 e extrai anexos PDF/DOCX/texto apenas nesta funcionalidade. IDs já vistos são excluídos antes do carregamento, anexos incompatíveis são filtrados antes do download, fallbacks param com candidatos fortes e somente os 30 melhores chegam ao extrator. O prompt inclui notes/anexos, o MCP diferencia encontrados de analisados e a skill Hermes preserva roteiros multi-cidade. O carregamento de mensagens/anexos usa concorrência máxima 8 e a análise usa concorrência máxima 6, com gravações sequenciais. Códigos de aeroporto exigem maiúsculas no ranking e FOR só aparece em consultas combinado com outra localidade da rota.
+verification: Suíte completa anterior com 81 arquivos/438 testes; timeout real eliminado no Telegram; 160 encontrados e 30 analisados dentro do limite. Após o refinamento de precisão, 12 testes focados e typecheck passaram. Falta repetir a validação real para confirmar reservas.
 files_changed:
   - apps/server/src/lib/gmail.ts
   - apps/server/src/lib/gmail.test.ts
