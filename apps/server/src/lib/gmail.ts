@@ -110,6 +110,19 @@ function collectExternalParts(part: gmail_v1.Schema$MessagePart | undefined, out
 
 const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 const MAX_ATTACHMENT_TEXT_CHARS = 20_000;
+const GMAIL_FETCH_CONCURRENCY = 8;
+
+async function mapConcurrent<T, R>(items: readonly T[], concurrency: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await fn(items[index]!);
+    }
+  }));
+  return results;
+}
 
 function supportedDocumentName(part: ExternalPart): string | null {
   const name = part.fileName.trim();
@@ -220,15 +233,14 @@ export function gmailApiFromGoogle(client: gmail_v1.Gmail): GmailApi {
         pageToken = ids.length < limit ? (res.data.nextPageToken ?? undefined) : undefined;
       } while (pageToken);
 
-      const out: GmailSearchEmail[] = [];
-      for (const id of ids) {
+      const out = await mapConcurrent(ids, GMAIL_FETCH_CONCURRENCY, async (id) => {
         const full = await client.users.messages.get({ userId: 'me', id, format: 'full' });
         const mapped = mapSearchMessage(full.data);
         if (options.includeAttachments) {
           mapped.attachmentText = await attachmentText(client, id, full.data.payload ?? undefined);
         }
-        out.push(mapped);
-      }
+        return mapped;
+      });
       out.sort((a, b) => a.internalDate - b.internalDate);
       return out;
     },

@@ -57,6 +57,7 @@ const DAY_MS = 86_400_000;
 
 const SEARCH_RESULT_LIMIT = 80;
 const EXTRACTION_LIMIT = 30;
+const EXTRACTION_CONCURRENCY = 6;
 const MIN_STRONG_CANDIDATES = 10;
 const STRONG_CANDIDATE_SCORE = 8;
 const SEARCH_STOP_WORDS = new Set([
@@ -179,6 +180,18 @@ function candidateScore(trip: Trip, email: GmailSearchEmail): number {
   return score;
 }
 
+async function mapConcurrent<T, R>(items: readonly T[], concurrency: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await fn(items[index]!);
+    }
+  }));
+  return results;
+}
+
 export function defaultTravelEmailImportDeps(): TravelEmailImportDeps | null {
   const cfg = getConfig();
   if (!hasGoogleCreds(cfg)) return null;
@@ -224,10 +237,22 @@ export async function importTravelReservationsFromGmail(
     const score = candidateScore(trip, b) - candidateScore(trip, a);
     return score || b.internalDate - a.internalDate;
   }).slice(0, EXTRACTION_LIMIT);
-  for (const email of candidates) {
+  const analyzed = await mapConcurrent(candidates, EXTRACTION_CONCURRENCY, async (email) => {
     try {
-      const extracted = await deps.generate({ purpose: 'judgment', system: SYSTEM, prompt: extractionPrompt(trip, email), schema: extractionSchema });
-      if (!extracted.matched || extracted.confidence !== 'high' || extracted.reservations.length === 0) continue;
+      return {
+        email,
+        extracted: await deps.generate({ purpose: 'judgment', system: SYSTEM, prompt: extractionPrompt(trip, email), schema: extractionSchema }),
+      };
+    } catch (error) {
+      console.error(`[travel-email] falha ao processar e-mail ${email.id}:`, error);
+      return null;
+    }
+  });
+  for (const result of analyzed) {
+    if (!result) continue;
+    const { email, extracted } = result;
+    if (!extracted.matched || extracted.confidence !== 'high' || extracted.reservations.length === 0) continue;
+    try {
       emailsMatched++;
       for (const item of extracted.reservations) {
         await deps.saveReservation({
@@ -253,7 +278,7 @@ export async function importTravelReservationsFromGmail(
         reservationsSaved++;
       }
     } catch (error) {
-      console.error(`[travel-email] falha ao processar e-mail ${email.id}:`, error);
+      console.error(`[travel-email] falha ao salvar reserva do e-mail ${email.id}:`, error);
     }
   }
   const savedTrip = await deps.getTripWithReservations(trip.id);

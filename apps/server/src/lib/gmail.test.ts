@@ -183,6 +183,31 @@ describe('gmailApiFromGoogle', () => {
     expect(out).toHaveLength(80);
   });
 
+  it('carrega mensagens completas com concorrência limitada', async () => {
+    let active = 0;
+    let peak = 0;
+    const client = {
+      users: {
+        messages: {
+          list: async () => ({ data: { messages: Array.from({ length: 16 }, (_, index) => ({ id: `m-${index}` })) } }),
+          get: async ({ id }: { id: string }) => {
+            active++;
+            peak = Math.max(peak, active);
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            active--;
+            return { data: msg(id, 5_000) };
+          },
+        },
+      },
+    } as never;
+
+    const out = await gmailApiFromGoogle(client).searchEmails('reserva', 16);
+
+    expect(out).toHaveLength(16);
+    expect(peak).toBeGreaterThan(1);
+    expect(peak).toBeLessThanOrEqual(8);
+  });
+
   it('não carrega novamente mensagens explicitamente excluídas', async () => {
     const loaded: string[] = [];
     const client = {

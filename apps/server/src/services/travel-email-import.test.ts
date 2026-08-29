@@ -135,6 +135,31 @@ describe('importTravelReservationsFromGmail', () => {
     expect(out.reservationsSaved).toBe(1);
   });
 
+  it('analisa candidatos com concorrência limitada para caber no timeout do MCP', async () => {
+    const candidates = Array.from({ length: 18 }, (_, index): GmailSearchEmail => ({
+      ...email,
+      id: `candidate-${index}`,
+      subject: `Reserva confirmada Recife ${index}`,
+      bodyText: `Voo Recife confirmado, localizador ABC${index}`,
+    }));
+    let active = 0;
+    let peak = 0;
+    const generate = vi.fn(async () => {
+      active++;
+      peak = Math.max(peak, active);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      active--;
+      return extraction({ matched: false, reservations: [] });
+    });
+    const fake = deps({ searchEmails: vi.fn(async () => candidates), generate });
+
+    await importTravelReservationsFromGmail(trip.name, fake);
+
+    expect(generate).toHaveBeenCalledTimes(18);
+    expect(peak).toBeGreaterThan(1);
+    expect(peak).toBeLessThanOrEqual(6);
+  });
+
   it('evita refetch de mensagens repetidas entre queries', async () => {
     const seenExclusions: string[][] = [];
     const searchEmails = vi.fn(async (
