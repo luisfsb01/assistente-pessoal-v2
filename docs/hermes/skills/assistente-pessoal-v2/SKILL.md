@@ -70,6 +70,7 @@ Ao migrar lembretes já existentes, liste os jobs com `cronjob`, altere somente 
 
 - Ao receber “crie uma viagem para X”, chame `travel_create_trip` imediatamente. Apenas o nome é obrigatório; não pergunte data, destino ou outros dados opcionais que não foram informados.
 - Use `travel_update_trip` quando o usuário acrescentar destino, motivo, viajantes, observações, datas ou situação posteriormente.
+- Em roteiros com várias cidades, preserve todas as origens, destinos, cidades intermediárias e hospedagens mencionadas em `destination` e/ou `notes` antes de importar o Gmail; não reduza o roteiro a um único destino.
 - Use `travel_add_reservation` quando o usuário fornecer manualmente os dados de voo, hotel, carro ou outra reserva.
 - Quando Luis disser que fez uma reserva e pedir para verificar o e-mail, chame `travel_import_gmail` com `subject: luis`. A ferramenta é exclusiva do Gmail dele; não a use para a esposa ou no grupo sem identificar que o pedido é do Luis.
 - Ao pedirem “minhas viagens”, use `travel_list_trips`. Ao pedirem detalhes de uma viagem, sempre use `travel_get_summary` e separe o que está confirmado, pendente, cancelado e ainda sem reserva.

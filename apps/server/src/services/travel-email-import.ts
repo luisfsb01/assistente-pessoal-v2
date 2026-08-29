@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { findTripByName, getTripWithReservations, saveTripReservation, type SaveReservationInput, type Trip, type TripWithReservations } from '../db/trips.js';
 import { getConfig } from '../lib/config.js';
-import { GmailSearchEmail, gmailApiFromGoogle } from '../lib/gmail.js';
+import { gmailApiFromGoogle, type GmailSearchEmail, type GmailSearchOptions } from '../lib/gmail.js';
 import { getGmailClient, hasGoogleCreds } from '../lib/google.js';
 import { generateAgentObject } from '../agent/models.js';
 
@@ -33,7 +33,7 @@ export type TravelEmailExtraction = z.infer<typeof extractionSchema>;
 export type TravelEmailImportDeps = {
   findTripByName(name: string): Promise<Trip | null>;
   getTripWithReservations(id: string): Promise<TripWithReservations | null>;
-  searchEmails(query: string, maxResults?: number): Promise<GmailSearchEmail[]>;
+  searchEmails(query: string, maxResults?: number, options?: GmailSearchOptions): Promise<GmailSearchEmail[]>;
   saveReservation(input: SaveReservationInput): Promise<unknown>;
   generate(opts: {
     purpose: 'judgment';
@@ -47,6 +47,7 @@ export type TravelEmailImportResult = {
   ok: boolean;
   trip: TripWithReservations | null;
   emailsFound: number;
+  emailsAnalyzed: number;
   emailsMatched: number;
   reservationsSaved: number;
   errorCode?: 'trip_not_found' | 'gmail_not_configured' | 'verification_failed';
@@ -54,28 +55,82 @@ export type TravelEmailImportResult = {
 
 const DAY_MS = 86_400_000;
 
-function safeWords(value: string): string[] {
+const SEARCH_RESULT_LIMIT = 80;
+const EXTRACTION_LIMIT = 30;
+const MIN_STRONG_CANDIDATES = 10;
+const STRONG_CANDIDATE_SCORE = 8;
+const SEARCH_STOP_WORDS = new Set([
+  'a', 'ao', 'aos', 'as', 'com', 'da', 'das', 'de', 'do', 'dos', 'e', 'em', 'essa', 'esse', 'esta', 'este',
+  'ida', 'para', 'pela', 'pelo', 'por', 'que', 'retorno', 'saindo', 'tambem', 'tem', 'ter', 'teve',
+  'trip', 'viagem', 'volta', 'voo', 'voos', 'hotel', 'hoteis', 'hospedagem', 'hospedagens', 'reserva', 'reservas',
+]);
+const AIRPORT_ALIASES = [
+  { patterns: ['sao jose do rio preto', 'rio preto'], terms: ['São José do Rio Preto', 'Rio Preto', 'SJP'] },
+  { patterns: ['fortaleza'], terms: ['Fortaleza', 'FOR'] },
+  { patterns: ['natal'], terms: ['Natal', 'NAT'] },
+  { patterns: ['sao paulo'], terms: ['São Paulo', 'GRU', 'CGH', 'VCP'] },
+  { patterns: ['rio de janeiro'], terms: ['Rio de Janeiro', 'GIG', 'SDU'] },
+  { patterns: ['brasilia'], terms: ['Brasília', 'BSB'] },
+  { patterns: ['recife'], terms: ['Recife', 'REC'] },
+  { patterns: ['salvador'], terms: ['Salvador', 'SSA'] },
+  { patterns: ['belo horizonte'], terms: ['Belo Horizonte', 'CNF', 'PLU'] },
+] as const;
+
+function normalized(value: string): string {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^A-Za-z0-9\s-]/g, ' ').split(/\s+/)
-    .filter((word) => word.length >= 3).slice(0, 4);
+    .toLocaleLowerCase('pt-BR').replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function travelContextTerms(trip: Trip): string[] {
+  const raw = [trip.destination, trip.notes, trip.name, trip.purpose].filter(Boolean).join(' ');
+  const corpus = normalized(raw);
+  const terms: string[] = [];
+  for (const alias of AIRPORT_ALIASES) {
+    if (alias.patterns.some((pattern) => corpus.includes(pattern))) terms.push(...alias.terms);
+  }
+  const tokens = raw.replace(/[^\p{L}\p{N}]+/gu, ' ').split(/\s+/).filter(Boolean);
+  for (const token of tokens) {
+    const key = normalized(token);
+    if (key.length >= 4 && !SEARCH_STOP_WORDS.has(key)) terms.push(token);
+  }
+  const seen = new Set<string>();
+  return terms.filter((term) => {
+    const key = normalized(term);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 24);
+}
+
+function gmailTerm(value: string): string {
+  const escaped = value.replace(/["\\]/g, ' ').trim();
+  return escaped.includes(' ') ? `"${escaped}"` : escaped;
 }
 
 export function buildTravelEmailQueries(trip: Trip): string[] {
-  const typeTerms = '{voo flight passagem bilhete hotel hospedagem reserva booking locadora aluguel carro rental}';
-  const dateTerms: string[] = [];
+  const allTypes = '{voo flight passagem bilhete ticket itinerario itinerary hotel hospedagem reserva booking voucher localizador confirmation confirmacao locadora aluguel carro rental}';
+  const flightTypes = '{voo flight passagem bilhete ticket itinerario itinerary localizador airline}';
+  const hotelTypes = '{hotel hospedagem booking voucher check-in reserva confirmation confirmacao}';
+  const providers = '{LATAM Azul GOL Smiles Booking Decolar Expedia Airbnb "Hoteis.com" CVC Omnibees Hotelbeds MaxMilhas 123milhas}';
+  let dateTerm: string;
   if (trip.startDate || trip.endDate) {
-    const start = new Date(`${trip.startDate ?? trip.endDate}T00:00:00.000Z`).getTime() - 45 * DAY_MS;
-    const end = new Date(`${trip.endDate ?? trip.startDate}T23:59:59.000Z`).getTime() + 15 * DAY_MS;
-    if (Number.isFinite(start) && Number.isFinite(end)) dateTerms.push(`after:${Math.floor(start / 1000)} before:${Math.floor(end / 1000)}`);
+    const start = new Date(`${trip.startDate ?? trip.endDate}T00:00:00.000Z`).getTime() - 730 * DAY_MS;
+    const end = new Date(`${trip.endDate ?? trip.startDate}T23:59:59.000Z`).getTime() + 45 * DAY_MS;
+    dateTerm = Number.isFinite(start) && Number.isFinite(end)
+      ? `after:${Math.floor(start / 1000)} before:${Math.floor(end / 1000)}`
+      : 'newer_than:5y';
   } else {
-    dateTerms.push('newer_than:2y');
+    dateTerm = 'newer_than:5y';
   }
-  const context = [...safeWords(trip.destination ?? ''), ...safeWords(trip.name)].slice(0, 4);
-  const contextual = context.length > 0 ? ` {${context.join(' ')}}` : '';
-  return [
-    `in:anywhere ${dateTerms[0]} ${typeTerms}${contextual}`,
-    `in:anywhere ${dateTerms[0]} ${typeTerms}`,
-  ];
+  const context = travelContextTerms(trip);
+  const contextual = context.length > 0 ? ` {${context.map(gmailTerm).join(' ')}}` : '';
+  return [...new Set([
+    `in:anywhere ${dateTerm} ${flightTypes}${contextual}`,
+    `in:anywhere ${dateTerm} ${hotelTypes}${contextual}`,
+    `in:anywhere ${dateTerm} ${providers}${contextual}`,
+    `in:anywhere ${dateTerm} ${allTypes}${contextual}`,
+    `in:anywhere ${dateTerm} ${allTypes}`,
+  ])];
 }
 
 const SYSTEM = `Você extrai reservas de viagem de e-mails.
@@ -90,16 +145,38 @@ Não inclua o corpo completo do e-mail em nenhum campo.`;
 
 function extractionPrompt(trip: Trip, email: GmailSearchEmail): string {
   return `Viagem:
-${JSON.stringify({ name: trip.name, destination: trip.destination, purpose: trip.purpose, travelers: trip.travelers, startDate: trip.startDate, endDate: trip.endDate })}
+${JSON.stringify({ name: trip.name, destination: trip.destination, purpose: trip.purpose, travelers: trip.travelers, notes: trip.notes, startDate: trip.startDate, endDate: trip.endDate })}
 
 E-mail candidato:
-${JSON.stringify({ id: email.id, date: new Date(email.internalDate).toISOString(), from: email.from, subject: email.subject, snippet: email.snippet, body: email.bodyText.slice(0, 8_000) })}
+${JSON.stringify({ id: email.id, date: new Date(email.internalDate).toISOString(), from: email.from, subject: email.subject, snippet: email.snippet, body: email.bodyText.slice(0, 8_000), attachments: email.attachmentText?.slice(0, 12_000) ?? '' })}
 
 Retorne matched, confidence, reason e reservations. Se não for uma confirmação relacionada, matched=false e reservations=[].`;
 }
 
 function hasOffset(value: string | null): value is string {
   return value !== null && /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value) && Number.isFinite(Date.parse(value));
+}
+
+function containsNormalizedTerm(content: string, term: string): boolean {
+  if (term.length === 3 && /^[a-z]{3}$/.test(term)) return (` ${content} `).includes(` ${term} `);
+  return content.includes(term);
+}
+
+function candidateScore(trip: Trip, email: GmailSearchEmail): number {
+  const subject = normalized(email.subject);
+  const content = normalized(`${email.from} ${email.subject} ${email.snippet} ${email.bodyText} ${email.attachmentText ?? ''}`);
+  let score = 0;
+  for (const term of travelContextTerms(trip)) {
+    const key = normalized(term);
+    if (key && containsNormalizedTerm(content, key)) score += key.length === 3 && /^[a-z]{3}$/.test(key) ? 5 : 3;
+  }
+  for (const signal of ['confirm', 'localizador', 'itinerario', 'bilhete', 'ticket', 'voucher', 'check in', 'booking', 'reserva']) {
+    if (content.includes(signal)) score += 2;
+    if (subject.includes(signal)) score += 2;
+  }
+  if (/promocao|oferta|newsletter/.test(subject)) score -= 4;
+  if (email.attachmentText) score += 2;
+  return score;
 }
 
 export function defaultTravelEmailImportDeps(): TravelEmailImportDeps | null {
@@ -119,18 +196,35 @@ export async function importTravelReservationsFromGmail(
   tripName: string,
   deps: TravelEmailImportDeps | null = defaultTravelEmailImportDeps(),
 ): Promise<TravelEmailImportResult> {
-  if (!deps) return { ok: false, trip: null, emailsFound: 0, emailsMatched: 0, reservationsSaved: 0, errorCode: 'gmail_not_configured' };
+  if (!deps) return { ok: false, trip: null, emailsFound: 0, emailsAnalyzed: 0, emailsMatched: 0, reservationsSaved: 0, errorCode: 'gmail_not_configured' };
   const trip = await deps.findTripByName(tripName);
-  if (!trip) return { ok: false, trip: null, emailsFound: 0, emailsMatched: 0, reservationsSaved: 0, errorCode: 'trip_not_found' };
+  if (!trip) return { ok: false, trip: null, emailsFound: 0, emailsAnalyzed: 0, emailsMatched: 0, reservationsSaved: 0, errorCode: 'trip_not_found' };
 
   const byId = new Map<string, GmailSearchEmail>();
-  for (const query of buildTravelEmailQueries(trip)) {
-    for (const email of await deps.searchEmails(query, 30)) if (email.id) byId.set(email.id, email);
+  const queries = buildTravelEmailQueries(trip);
+  for (const [index, query] of queries.entries()) {
+    for (const email of await deps.searchEmails(query, SEARCH_RESULT_LIMIT, {
+      includeAttachments: true,
+      excludeIds: byId.keys(),
+    })) {
+      if (email.id) byId.set(email.id, email);
+    }
+    // As duas primeiras consultas cobrem voos e hotéis. As demais são fallback para
+    // provedores/tipos genéricos e só valem o custo quando ainda faltam sinais fortes.
+    if (index >= 1) {
+      const strongCandidates = [...byId.values()]
+        .filter((email) => candidateScore(trip, email) >= STRONG_CANDIDATE_SCORE).length;
+      if (strongCandidates >= MIN_STRONG_CANDIDATES) break;
+    }
   }
 
   let emailsMatched = 0;
   let reservationsSaved = 0;
-  for (const email of [...byId.values()].sort((a, b) => a.internalDate - b.internalDate).slice(0, 40)) {
+  const candidates = [...byId.values()].sort((a, b) => {
+    const score = candidateScore(trip, b) - candidateScore(trip, a);
+    return score || b.internalDate - a.internalDate;
+  }).slice(0, EXTRACTION_LIMIT);
+  for (const email of candidates) {
     try {
       const extracted = await deps.generate({ purpose: 'judgment', system: SYSTEM, prompt: extractionPrompt(trip, email), schema: extractionSchema });
       if (!extracted.matched || extracted.confidence !== 'high' || extracted.reservations.length === 0) continue;
@@ -167,6 +261,7 @@ export async function importTravelReservationsFromGmail(
     ok: savedTrip !== null,
     trip: savedTrip,
     emailsFound: byId.size,
+    emailsAnalyzed: candidates.length,
     emailsMatched,
     reservationsSaved,
     ...(!savedTrip ? { errorCode: 'verification_failed' as const } : {}),

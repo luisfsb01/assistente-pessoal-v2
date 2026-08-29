@@ -21,7 +21,7 @@ function deps(over: Partial<TravelMcpDeps> = {}): TravelMcpDeps {
     listTrips: vi.fn(async () => [trip]),
     updateTrip: vi.fn(async () => trip),
     saveTripReservation: vi.fn(async () => { full = { ...full, reservations: [reservation] }; return reservation; }),
-    importFromGmail: vi.fn(async () => ({ ok: true, trip: full, emailsFound: 2, emailsMatched: 1, reservationsSaved: 1 })),
+    importFromGmail: vi.fn(async () => ({ ok: true, trip: full, emailsFound: 2, emailsAnalyzed: 2, emailsMatched: 1, reservationsSaved: 1 })),
     ...over,
   };
 }
@@ -45,5 +45,11 @@ describe('travel MCP writes', () => {
     const out = await importTripGmailFromHermes({ subject: 'esposa', trip_name: trip.name }, fake);
     expect(fake.importFromGmail).not.toHaveBeenCalled();
     expect(out.structuredContent).toMatchObject({ ok: false, error_code: 'gmail_access_not_allowed' });
+  });
+
+  it('distingue candidatos encontrados dos efetivamente analisados', async () => {
+    const fake = deps();
+    const out = await importTripGmailFromHermes({ subject: 'luis', trip_name: trip.name }, fake);
+    expect(out.structuredContent).toMatchObject({ emails_found: 2, emails_analyzed: 2 });
   });
 });

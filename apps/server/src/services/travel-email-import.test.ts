@@ -54,6 +54,30 @@ describe('buildTravelEmailQueries', () => {
     expect(queries[0]).toContain('Recife');
     expect(queries[0]).toContain('Casamento');
   });
+
+  it('usa o roteiro multi-cidade completo, inclusive notes e códigos de aeroportos', () => {
+    const queries = buildTravelEmailQueries({
+      ...trip,
+      name: 'Casamento Caio e Miriam',
+      destination: 'São José do Rio Preto para Fortaleza, volta por Natal',
+      notes: 'Hospedagens em Fortaleza, Grossos e Natal',
+    });
+    const all = queries.join('\n');
+    expect(all).toContain('Grossos');
+    expect(all).toContain('Fortaleza');
+    expect(all).toContain('Natal');
+    expect(all).toContain('SJP');
+    expect(all).toContain('FOR');
+    expect(all).toContain('NAT');
+    expect(all).toContain('LATAM');
+    expect(all).toContain('Booking');
+  });
+
+  it('inclui reservas compradas com antecedência maior que 45 dias', () => {
+    const queries = buildTravelEmailQueries({ ...trip, startDate: '2027-10-10', endDate: '2027-10-13' });
+    const after = Number(queries[0].match(/after:(\d+)/)?.[1]);
+    expect(after).toBeLessThanOrEqual(Date.parse('2026-10-10T00:00:00Z') / 1000);
+  });
 });
 
 describe('importTravelReservationsFromGmail', () => {
@@ -61,6 +85,10 @@ describe('importTravelReservationsFromGmail', () => {
     const fake = deps();
     const out = await importTravelReservationsFromGmail('Casamento do Caio', fake);
     expect(out).toMatchObject({ ok: true, emailsFound: 1, emailsMatched: 1, reservationsSaved: 1 });
+    expect(fake.searchEmails).toHaveBeenCalledWith(expect.any(String), 80, expect.objectContaining({
+      includeAttachments: true,
+      excludeIds: expect.anything(),
+    }));
     expect(fake.generate).toHaveBeenCalledTimes(1);
     expect(fake.saveReservation).toHaveBeenCalledWith(expect.objectContaining({
       tripId: 'trip-1', source: 'gmail', sourceEmailId: 'email-1', sourceItemKey: 'flight-ABC123',
@@ -84,5 +112,71 @@ describe('importTravelReservationsFromGmail', () => {
     const fake = deps({ generate: vi.fn(async () => lowDate) });
     await importTravelReservationsFromGmail('Casamento do Caio', fake);
     expect(fake.saveReservation).toHaveBeenCalledWith(expect.objectContaining({ startAt: null }));
+  });
+
+  it('prioriza o comprovante relevante mesmo quando buscas amplas excedem o teto de extração', async () => {
+    const candidates = Array.from({ length: 100 }, (_, index): GmailSearchEmail => ({
+      ...email,
+      id: `email-${index}`,
+      internalDate: email.internalDate + index,
+      subject: index === 99 ? 'Reserva confirmada Fortaleza' : `Promoção genérica ${index}`,
+      snippet: index === 99 ? 'Localizador FOR123' : 'oferta',
+      bodyText: index === 99 ? 'Voo confirmado para Fortaleza. Localizador FOR123.' : 'Oferta de viagem.',
+    }));
+    const generate = vi.fn(async ({ prompt }: { prompt: string }) => (
+      prompt.includes('FOR123') ? extraction() : extraction({ matched: false, reservations: [] })
+    ));
+    const fake = deps({ searchEmails: vi.fn(async () => candidates), generate });
+
+    const out = await importTravelReservationsFromGmail('Casamento do Caio', fake);
+
+    expect(generate.mock.calls.some(([call]) => call.prompt.includes('FOR123'))).toBe(true);
+    expect(generate.mock.calls.length).toBeLessThanOrEqual(30);
+    expect(out.reservationsSaved).toBe(1);
+  });
+
+  it('evita refetch de mensagens repetidas entre queries', async () => {
+    const seenExclusions: string[][] = [];
+    const searchEmails = vi.fn(async (
+      _query: string,
+      _limit?: number,
+      options?: { excludeIds?: Iterable<string> },
+    ) => {
+      const excluded = [...(options?.excludeIds ?? [])];
+      seenExclusions.push(excluded);
+      return excluded.includes(email.id) ? [] : [email];
+    });
+    const fake = deps({ searchEmails });
+
+    await importTravelReservationsFromGmail(trip.name, fake);
+
+    expect(seenExclusions[0]).toEqual([]);
+    expect(seenExclusions.slice(1).every((ids) => ids.includes(email.id))).toBe(true);
+    expect(fake.generate).toHaveBeenCalledOnce();
+  });
+
+  it('não executa fallback genérico quando as buscas dirigidas já trouxeram candidatos fortes', async () => {
+    const strong = Array.from({ length: 12 }, (_, index): GmailSearchEmail => ({
+      ...email,
+      id: `strong-${index}`,
+      subject: `Reserva confirmada Recife ${index}`,
+      bodyText: `Voo Recife confirmado, localizador ABC${index}`,
+    }));
+    const searchEmails = vi.fn(async () => strong);
+    const fake = deps({ searchEmails, generate: vi.fn(async () => extraction({ matched: false, reservations: [] })) });
+
+    await importTravelReservationsFromGmail(trip.name, fake);
+
+    expect(searchEmails).toHaveBeenCalledTimes(2);
+  });
+
+  it('fornece notes ao extrator para validar hotéis das cidades do roteiro', async () => {
+    const withNotes = { ...trip, notes: 'Hospedagens esperadas em Fortaleza, Grossos e Natal' };
+    const generate = vi.fn(async () => extraction({ matched: false, reservations: [] }));
+    const fake = deps({ findTripByName: vi.fn(async () => withNotes), generate });
+
+    await importTravelReservationsFromGmail(withNotes.name, fake);
+
+    expect(generate.mock.calls[0]?.[0].prompt).toContain('Grossos');
   });
 });

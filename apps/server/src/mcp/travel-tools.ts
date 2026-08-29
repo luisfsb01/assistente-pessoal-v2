@@ -146,6 +146,7 @@ export async function importTripGmailFromHermes(
     ok: true,
     verified: true,
     emails_found: imported.emailsFound,
+    emails_analyzed: imported.emailsAnalyzed,
     emails_matched: imported.emailsMatched,
     reservations_saved: imported.reservationsSaved,
     ...(imported.trip ? payload(imported.trip) : {}),

@@ -18,7 +18,7 @@ function deps(over: Partial<TripToolDeps> = {}): TripToolDeps {
     listTrips: vi.fn(async () => [trip]),
     updateTrip: vi.fn(async () => trip),
     saveTripReservation: vi.fn(async (input) => ({ id: 'r1', tripId: input.tripId })) as never,
-    importFromGmail: vi.fn(async () => ({ ok: true, trip: full, emailsFound: 1, emailsMatched: 1, reservationsSaved: 1 })),
+    importFromGmail: vi.fn(async () => ({ ok: true, trip: full, emailsFound: 1, emailsAnalyzed: 1, emailsMatched: 1, reservationsSaved: 1 })),
     ...over,
   };
 }

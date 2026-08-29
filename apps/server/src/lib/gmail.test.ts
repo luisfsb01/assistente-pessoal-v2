@@ -33,6 +33,26 @@ describe('mapMessage', () => {
   });
 });
 
+function pdfWithText(text: string): Uint8Array {
+  const escaped = text.replace(/([\\()])/g, '\\$1');
+  const stream = `BT\n/F1 12 Tf\n72 720 Td\n(${escaped}) Tj\nET`;
+  const objects = [
+    '1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n',
+    '2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n',
+    '3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>\nendobj\n',
+    '4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n',
+    `5 0 obj\n<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream\nendobj\n`,
+  ];
+  let pdf = '%PDF-1.4\n';
+  const offsets: number[] = [];
+  for (const object of objects) { offsets.push(Buffer.byteLength(pdf)); pdf += object; }
+  const xrefOffset = Buffer.byteLength(pdf);
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  pdf += offsets.map((offset) => `${String(offset).padStart(10, '0')} 00000 n \n`).join('');
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
+  return new TextEncoder().encode(pdf);
+}
+
 describe('mapSearchMessage', () => {
   it('decodifica o corpo base64url e prefere texto puro', () => {
     const body = Buffer.from('Produto: Fone Bluetooth').toString('base64url');
@@ -143,4 +163,81 @@ describe('gmailApiFromGoogle', () => {
     expect(calls).toEqual([{ query: 'after:1 before:2 Shopee' }, { format: 'full' }]);
     expect(out[0]?.bodyText).toBe('Produto: Cafeteira');
   });
+
+  it('pagina a pesquisa além de 50 resultados quando o chamador solicita', async () => {
+    const client = {
+      users: {
+        messages: {
+          list: async ({ pageToken }: { pageToken?: string }) => ({
+            data: pageToken
+              ? { messages: Array.from({ length: 30 }, (_, index) => ({ id: `b-${index}` })) }
+              : { messages: Array.from({ length: 50 }, (_, index) => ({ id: `a-${index}` })), nextPageToken: 'p2' },
+          }),
+          get: async ({ id }: { id: string }) => ({ data: msg(id, 5_000) }),
+        },
+      },
+    } as never;
+
+    const out = await gmailApiFromGoogle(client).searchEmails('reserva', 80);
+
+    expect(out).toHaveLength(80);
+  });
+
+  it('não carrega novamente mensagens explicitamente excluídas', async () => {
+    const loaded: string[] = [];
+    const client = {
+      users: {
+        messages: {
+          list: async () => ({ data: { messages: [{ id: 'repetido' }, { id: 'novo' }] } }),
+          get: async ({ id }: { id: string }) => {
+            loaded.push(id);
+            return { data: msg(id, 5_000) };
+          },
+        },
+      },
+    } as never;
+
+    const out = await gmailApiFromGoogle(client).searchEmails('reserva', 10, {
+      excludeIds: ['repetido'],
+    });
+
+    expect(out.map((item) => item.id)).toEqual(['novo']);
+    expect(loaded).toEqual(['novo']);
+  });
+
+  it('extrai texto de PDF anexado ao comprovante pesquisado', async () => {
+    const pdf = pdfWithText('Reserva Hotel Fortaleza H123 confirmada');
+    const attachmentCalls: string[] = [];
+    const client = {
+      users: {
+        messages: {
+          list: async () => ({ data: { messages: [{ id: 'reserva-1' }] } }),
+          get: async ({ id }: { id: string }) => ({
+            data: {
+              ...msg(id, 5_000),
+              payload: {
+                headers: msg(id, 5_000).payload.headers,
+                parts: [
+                  ...Array.from({ length: 7 }, (_, index) => ({
+                    filename: `logo-${index}.png`, mimeType: 'image/png',
+                    body: { attachmentId: `inline-image-${index}`, size: 1_024 },
+                  })),
+                  { filename: 'reserva.pdf', mimeType: 'application/pdf', body: { attachmentId: 'att-1', size: pdf.byteLength } },
+                ],
+              },
+            },
+          }),
+          attachments: { get: async ({ id }: { id: string }) => {
+            attachmentCalls.push(id);
+            return { data: { data: Buffer.from(pdf).toString('base64url') } };
+          } },
+        },
+      },
+    } as never;
+
+    const out = await gmailApiFromGoogle(client).searchEmails('reserva', 5, { includeAttachments: true });
+
+    expect(out[0]?.attachmentText).toContain('Reserva Hotel Fortaleza H123 confirmada');
+    expect(attachmentCalls).toEqual(['att-1']);
+  }, 30_000);
 });
