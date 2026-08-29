@@ -136,11 +136,13 @@ export async function addTripReservationFromHermes(
 }
 
 export async function importTripGmailFromHermes(
-  input: { subject: Subject; trip_name: string },
+  input: { subject: Subject; trip_name: string; reservation_types?: Array<'flight' | 'hotel'> },
   deps: TravelMcpDeps = defaultDeps,
 ): Promise<CallToolResult> {
   if (input.subject !== 'luis') return result({ ok: false, verified: false, error_code: 'gmail_access_not_allowed' });
-  const imported = await deps.importFromGmail(input.trip_name);
+  const requestedTypes = [...new Set(input.reservation_types ?? [])];
+  const focus = requestedTypes.length === 1 ? requestedTypes[0] : 'all';
+  const imported = await deps.importFromGmail(input.trip_name, undefined, { focus });
   if (!imported.ok || !imported.trip) return result({ ok: false, verified: false, error_code: imported.errorCode ?? 'verification_failed' });
   return result({
     ok: true,
@@ -232,8 +234,14 @@ export function registerTravelMcpTools(server: McpServer, deps: TravelMcpDeps = 
   }, async (input) => addTripReservationFromHermes(input, deps));
 
   server.registerTool('travel_import_gmail', {
-    title: 'Importar reservas do Gmail', description: 'Pesquisa confirmações no Gmail do Luis, extrai e salva somente correspondências de alta confiança.',
-    inputSchema: fromJsonSchema<{ subject: Subject; trip_name: string }>({ type: 'object', properties: { subject, trip_name: { type: 'string', minLength: 2, maxLength: 200 } }, required: ['subject', 'trip_name'], additionalProperties: false }),
+    title: 'Importar reservas do Gmail', description: 'Pesquisa confirmações no Gmail do Luis, extrai e salva somente correspondências de alta confiança. Quando o pedido for específico, informe reservation_types para pesquisar apenas voos ou apenas hotéis e evitar timeout.',
+    inputSchema: fromJsonSchema<{ subject: Subject; trip_name: string; reservation_types?: Array<'flight' | 'hotel'> }>({
+      type: 'object', properties: {
+        subject,
+        trip_name: { type: 'string', minLength: 2, maxLength: 200 },
+        reservation_types: { type: 'array', items: { type: 'string', enum: ['flight', 'hotel'] }, minItems: 1, maxItems: 2, uniqueItems: true },
+      }, required: ['subject', 'trip_name'], additionalProperties: false,
+    }),
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
   }, async (input) => importTripGmailFromHermes(input, deps));
 }

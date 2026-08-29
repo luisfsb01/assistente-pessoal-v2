@@ -275,6 +275,24 @@ describe('importTravelReservationsFromGmail', () => {
     expect(out.reservationsSaved).toBe(1);
   });
 
+  it('no foco hotel pesquisa apenas hospedagens e limita o julgamento a dez candidatos', async () => {
+    const hotels = Array.from({ length: 20 }, (_, index): GmailSearchEmail => ({
+      ...email,
+      id: `hotel-${index}`,
+      subject: `Hotel confirmado em Fortaleza ${index}`,
+      bodyText: `Hospedagem reservada em Fortaleza. Voucher HOTEL${index}.`,
+    }));
+    const searchEmails = vi.fn(async () => hotels);
+    const generate = vi.fn(async () => extraction({ matched: false, reservations: [] }));
+    const fake = deps({ searchEmails, generate });
+
+    await importTravelReservationsFromGmail(trip.name, fake, { focus: 'hotel' });
+
+    expect(searchEmails).toHaveBeenCalledTimes(2);
+    expect(searchEmails.mock.calls.every(([query]) => /hotel|Booking/.test(query))).toBe(true);
+    expect(generate).toHaveBeenCalledTimes(10);
+  });
+
   it('fornece notes ao extrator para validar hotéis das cidades do roteiro', async () => {
     const withNotes = { ...trip, notes: 'Hospedagens esperadas em Fortaleza, Grossos e Natal' };
     const generate = vi.fn(async () => extraction({ matched: false, reservations: [] }));

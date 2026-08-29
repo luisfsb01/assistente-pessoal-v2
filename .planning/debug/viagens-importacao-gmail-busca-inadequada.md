@@ -2,15 +2,15 @@
 status: investigating
 trigger: 'A funcionalidade de viagens no Hermes atualiza o roteiro de "Casamento Caio e Miriam", mas travel_import_gmail analisa 59 e-mails e retorna zero reservas para voos São José do Rio Preto → Fortaleza, volta por Natal, e hotéis em Fortaleza, Grossos e Natal.'
 created: 2026-08-26T21:20:52.4455331-03:00
-updated: 2026-08-29T17:15:00-03:00
+updated: 2026-08-29T17:25:00-03:00
 ---
 
 ## Current Focus
 
-hypothesis: A extração de voos está resolvida, mas o early stop considera apenas quantidade de candidatos fortes e pode interromper antes da consulta de hotéis em roteiros com várias consultas de pares de aeroportos.
-test: Exigir a execução de todas as consultas dirigidas de rota, hotel e voo e reservar 10 das 18 análises para candidatos com sinais de hospedagem.
-expecting: A busca preserva os dois voos já encontrados e passa a avaliar os comprovantes de Fortaleza, Grossos e Natal dentro do mesmo limite de 18 chamadas.
-next_action: Validar, implantar e repetir a busca para importar os hotéis.
+hypothesis: A busca completa agora inclui hotéis, mas o custo das consultas de rota mais 18 julgamentos ainda ultrapassa o timeout de 60 segundos quando o usuário pede somente hospedagens.
+test: Adicionar foco explícito por tipo ao MCP e, para hotel, executar apenas duas consultas e no máximo dez julgamentos.
+expecting: O pedido específico de hotéis conclui no prazo sem repetir a análise ou gravação dos voos existentes.
+next_action: Validar, implantar e repetir a busca com reservation_types=[hotel].
 
 ## Symptoms
 
@@ -129,11 +129,16 @@ started: Comportamento observado após a integração/migração da funcionalida
   found: A importação salvou e verificou duas reservas: LATAM em 28/10/2026, São José do Rio Preto → Brasília → Fortaleza, e Azul em 05/11/2026, registrada como São José do Rio Preto → Natal. A releitura confirmou exatamente duas reservas no banco. Nenhum hotel foi analisado/salvo.
   implication: Structured Outputs e persistência estão corrigidos. O bloqueio restante dos hotéis está na seleção de consultas/candidatos, não mais na extração nem no banco.
 
+- timestamp: 2026-08-29T17:19:00-03:00
+  checked: Teste real após deploy da cota de hotéis no commit 6545da6.
+  found: A chamada passou a executar a busca de hospedagens, mas excedeu 60 segundos; a releitura confirmou zero hotéis e preservou os dois voos existentes.
+  implication: A cobertura dos hotéis foi corrigida, porém uma única operação combinada ainda é cara demais. O MCP precisa aceitar foco por tipo para não repetir consultas e julgamentos de voo.
+
 ## Resolution
 
 root_cause: A importação tinha falhas sucessivas de recuperação e execução: buscava contexto truncado, ignorava notes/aeroportos/anexos, cortava candidatos e executava lentamente. Após corrigir recall, ranking e timeout, a causa final do resultado vazio era details: z.record(z.unknown()) no schema do extrator, convertido para additionalProperties={}, incompatível com Structured Outputs estrito; por isso todas as chamadas generate falhavam antes do julgamento.
-fix: Queries usam destination+notes+name+purpose, cidades/aeroportos, tipos de reserva e plataformas comuns; janela foi ampliada para dois anos; Gmail pagina e extrai anexos suportados. Há deduplicação, ranking e concorrência limitada. Códigos de aeroporto exigem maiúsculas e FOR só aparece combinado com outra localidade. Viagens sem datas aceitam confirmação futura compatível. O schema do extrator usa details fechado, com segments estruturados e notes. Todas as consultas dirigidas de rota, hotel e voo são obrigatórias antes do early stop, e 10 das 18 vagas de extração ficam reservadas a hospedagens.
-verification: O teste real após o schema fechado salvou e releu duas reservas de voo no banco, comprovando extração e persistência. Falta validar localmente a cota de hotéis e repetir a prova real para Fortaleza, Grossos e Natal.
+fix: Queries usam destination+notes+name+purpose, cidades/aeroportos, tipos de reserva e plataformas comuns; Gmail pagina e extrai anexos suportados. Há deduplicação, ranking e concorrência limitada. O schema do extrator usa objeto fechado compatível. O MCP aceita reservation_types; foco hotel executa somente duas consultas e até dez julgamentos, enquanto a busca combinada mantém cotas por tipo.
+verification: O teste real salvou e releu duas reservas de voo no banco. A busca combinada passou a incluir hotéis, mas confirmou timeout de 60 segundos. Falta validar localmente e em produção o novo foco exclusivo de hotel.
 files_changed:
   - apps/server/src/lib/gmail.ts
   - apps/server/src/lib/gmail.test.ts

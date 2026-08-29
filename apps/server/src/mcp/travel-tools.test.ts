@@ -66,4 +66,18 @@ describe('travel MCP writes', () => {
       subject: 'Reserva Fortaleza', confidence: 'medium', reason: 'Falta a data da hospedagem.',
     })] });
   });
+
+  it('encaminha foco exclusivo de hotel para evitar repetir a análise de voos', async () => {
+    const importFromGmail = vi.fn(async () => ({
+      ok: true, trip: { ...trip, reservations: [] }, emailsFound: 0, emailsAnalyzed: 0,
+      emailsMatched: 0, reservationsSaved: 0,
+    }));
+    const fake = deps({ importFromGmail });
+
+    await importTripGmailFromHermes({
+      subject: 'luis', trip_name: trip.name, reservation_types: ['hotel'],
+    }, fake);
+
+    expect(importFromGmail).toHaveBeenCalledWith(trip.name, undefined, { focus: 'hotel' });
+  });
 });
