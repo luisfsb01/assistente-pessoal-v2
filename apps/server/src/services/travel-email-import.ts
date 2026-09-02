@@ -82,6 +82,8 @@ const SEARCH_RESULT_LIMIT = 80;
 const EXTRACTION_LIMIT = 18;
 const EXTRACTION_CONCURRENCY = 6;
 const HOTEL_EXTRACTION_QUOTA = 10;
+const HOTEL_FOCUS_SEARCH_RESULT_LIMIT = 30;
+const HOTEL_FOCUS_EXTRACTION_LIMIT = 6;
 const MIN_STRONG_CANDIDATES = 10;
 const STRONG_CANDIDATE_SCORE = 8;
 const SEARCH_STOP_WORDS = new Set([
@@ -141,7 +143,6 @@ export function buildTravelEmailQueries(trip: Trip, focus: TravelEmailImportFocu
   const flightTypes = '{voo flight passagem bilhete ticket itinerario itinerary localizador airline}';
   const hotelTypes = '{hotel hospedagem booking voucher check-in reserva confirmation confirmacao}';
   const providers = '{LATAM Azul GOL Smiles Booking Decolar Expedia Airbnb "Hoteis.com" CVC Omnibees Hotelbeds MaxMilhas 123milhas}';
-  const hotelProviders = '{Booking Decolar Expedia Airbnb "Hoteis.com" CVC Omnibees Hotelbeds}';
   let dateTerm: string;
   if (trip.startDate || trip.endDate) {
     const start = new Date(`${trip.startDate ?? trip.endDate}T00:00:00.000Z`).getTime() - 730 * DAY_MS;
@@ -167,10 +168,7 @@ export function buildTravelEmailQueries(trip: Trip, focus: TravelEmailImportFocu
     }
   }
   if (focus === 'hotel') {
-    return [...new Set([
-      `in:anywhere ${dateTerm} ${hotelTypes}${contextual}`,
-      `in:anywhere ${dateTerm} ${hotelProviders}${contextual}`,
-    ])];
+    return [`in:anywhere ${dateTerm} ${hotelTypes}${contextual}`];
   }
   if (focus === 'flight') {
     return [...new Set([
@@ -284,12 +282,13 @@ export async function importTravelReservationsFromGmail(
   const byId = new Map<string, GmailSearchEmail>();
   const focus = options.focus ?? 'all';
   const queries = buildTravelEmailQueries(trip, focus);
+  const searchResultLimit = focus === 'hotel' ? HOTEL_FOCUS_SEARCH_RESULT_LIMIT : SEARCH_RESULT_LIMIT;
   const airportGroupCount = matchedAirportTermGroups(trip).length;
   const coreQueryCount = airportGroupCount > 1
     ? (airportGroupCount * (airportGroupCount - 1)) / 2 + 2
     : 2;
   for (const [index, query] of queries.entries()) {
-    for (const email of await deps.searchEmails(query, SEARCH_RESULT_LIMIT, {
+    for (const email of await deps.searchEmails(query, searchResultLimit, {
       includeAttachments: true,
       excludeIds: byId.keys(),
     })) {
@@ -313,7 +312,7 @@ export async function importTravelReservationsFromGmail(
   });
   let candidates: GmailSearchEmail[];
   if (focus === 'hotel') {
-    candidates = rankedCandidates.filter(looksLikeHotelCandidate).slice(0, HOTEL_EXTRACTION_QUOTA);
+    candidates = rankedCandidates.filter(looksLikeHotelCandidate).slice(0, HOTEL_FOCUS_EXTRACTION_LIMIT);
   } else if (focus === 'flight') {
     candidates = rankedCandidates.filter((email) => !looksLikeHotelCandidate(email)).slice(0, EXTRACTION_LIMIT);
   } else {
@@ -351,6 +350,7 @@ export async function importTravelReservationsFromGmail(
     try {
       emailsMatched++;
       for (const item of extracted.reservations) {
+        if (focus !== 'all' && item.kind !== focus) continue;
         await deps.saveReservation({
           tripId: trip.id,
           kind: item.kind,

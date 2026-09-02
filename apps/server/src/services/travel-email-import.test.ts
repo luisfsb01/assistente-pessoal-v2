@@ -275,7 +275,7 @@ describe('importTravelReservationsFromGmail', () => {
     expect(out.reservationsSaved).toBe(1);
   });
 
-  it('no foco hotel pesquisa apenas hospedagens e limita o julgamento a dez candidatos', async () => {
+  it('no foco hotel faz uma busca curta e limita o julgamento a uma rodada de seis candidatos', async () => {
     const hotels = Array.from({ length: 20 }, (_, index): GmailSearchEmail => ({
       ...email,
       id: `hotel-${index}`,
@@ -288,9 +288,24 @@ describe('importTravelReservationsFromGmail', () => {
 
     await importTravelReservationsFromGmail(trip.name, fake, { focus: 'hotel' });
 
-    expect(searchEmails).toHaveBeenCalledTimes(2);
-    expect(searchEmails.mock.calls.every(([query]) => /hotel|Booking/.test(query))).toBe(true);
-    expect(generate).toHaveBeenCalledTimes(10);
+    expect(searchEmails).toHaveBeenCalledTimes(1);
+    expect(searchEmails).toHaveBeenCalledWith(expect.stringMatching(/\{hotel hospedagem/), 30, expect.anything());
+    expect(generate).toHaveBeenCalledTimes(6);
+  });
+
+  it('não salva voos produzidos pelo extrator quando o foco solicitado é hotel', async () => {
+    const hotelCandidate = {
+      ...email,
+      id: 'hotel-candidate',
+      subject: 'Hotel confirmado em Fortaleza',
+      bodyText: 'Hospedagem reservada em Fortaleza. Voucher HOTEL123.',
+    };
+    const fake = deps({ searchEmails: vi.fn(async () => [hotelCandidate]) });
+
+    const out = await importTravelReservationsFromGmail(trip.name, fake, { focus: 'hotel' });
+
+    expect(out.reservationsSaved).toBe(0);
+    expect(fake.saveReservation).not.toHaveBeenCalled();
   });
 
   it('fornece notes ao extrator para validar hotéis das cidades do roteiro', async () => {
